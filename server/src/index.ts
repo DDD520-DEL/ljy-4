@@ -9,6 +9,7 @@ import geneReportsRouter from './routes/geneReports.js';
 import geneticsRouter from './routes/genetics.js';
 import breedingRouter from './routes/breeding.js';
 import searchRouter from './routes/search.js';
+import dashboardRouter from './routes/dashboard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,6 +33,7 @@ app.use('/api/gene-reports', geneReportsRouter);
 app.use('/api/genetics', geneticsRouter);
 app.use('/api/breeding', breedingRouter);
 app.use('/api/search', searchRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: '接口不存在' });

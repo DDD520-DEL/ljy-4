@@ -6,6 +6,7 @@ import {
   BarChart3,
   Settings,
   Home,
+  Activity,
 } from 'lucide-react';
 import SearchBar from './components/SearchBar';
 
@@ -19,12 +20,14 @@ import RiskPrediction from './pages/RiskPrediction';
 import BreedingManage from './pages/BreedingManage';
 import BreedingPairDetail from './pages/BreedingPairDetail';
 import PetTimeline from './pages/PetTimeline';
+import GeneticDashboard from './pages/GeneticDashboard';
 
 const navItems = [
   { path: '/', label: '首页', icon: Home, exact: true },
   { path: '/pets', label: '宠物管理', icon: PawPrint },
   { path: '/pedigree', label: '谱系图', icon: Network },
   { path: '/gene-reports', label: '基因报告', icon: Dna },
+  { path: '/genetic-dashboard', label: '遗传看板', icon: Activity },
   { path: '/risk-prediction', label: '风险预测', icon: BarChart3 },
   { path: '/breeding', label: '种畜管理', icon: Settings },
 ];
@@ -108,6 +111,7 @@ function App() {
             <Route path="/gene-reports" element={<GeneReports />} />
             <Route path="/gene-reports/:id" element={<GeneReportDetail />} />
             <Route path="/risk-prediction" element={<RiskPrediction />} />
+            <Route path="/genetic-dashboard" element={<GeneticDashboard />} />
             <Route path="/breeding" element={<BreedingManage />} />
             <Route path="/breeding/:id" element={<BreedingPairDetail />} />
           </Routes>
@@ -251,6 +255,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith('/gene-reports/')) return '基因报告详情';
   if (pathname === '/gene-reports') return '基因报告';
   if (pathname === '/risk-prediction') return '风险预测';
+  if (pathname === '/genetic-dashboard') return '遗传看板';
   if (pathname.startsWith('/breeding/')) return '繁殖配对详情';
   if (pathname === '/breeding') return '种畜管理';
   return '宠物基因平台';
@@ -267,6 +272,7 @@ function getPageSubtitle(pathname: string): string {
   if (pathname.startsWith('/gene-reports/')) return '查看基因检测报告详细解析';
   if (pathname === '/gene-reports') return '上传和管理基因检测报告';
   if (pathname === '/risk-prediction') return '分析遗传病风险和预测后代风险';
+  if (pathname === '/genetic-dashboard') return '种群遗传多样性数据看板';
   if (pathname.startsWith('/breeding/')) return '查看繁殖配对详细信息和风险评估';
   if (pathname === '/breeding') return '管理种畜信息和繁殖配对';
   return '宠物基因谱系平台';

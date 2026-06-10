@@ -366,6 +366,73 @@ export interface SearchResponse {
   breedingPairs: SearchResultBreedingPair[];
 }
 
+export interface BreedDistributionItem {
+  species: string;
+  breed: string;
+  count: number;
+}
+
+export interface MarkerCarrierRateItem {
+  markerId: string;
+  markerName: string;
+  geneName: string;
+  disease: string;
+  species: string;
+  inheritance: string;
+  riskLevel: string;
+  totalInSpecies: number;
+  testedCount: number;
+  carrierCount: number;
+  affectedCount: number;
+  clearCount: number;
+  carrierRate: number;
+  affectedRate: number;
+  detectionRate: number;
+}
+
+export interface InbreedingDistribution {
+  totalPets: number;
+  petsWithBothParents: number;
+  averageCoefficient: number;
+  maxCoefficient: number;
+  distribution: {
+    low: number;
+    medium: number;
+    high: number;
+    very_high: number;
+    unknown: number;
+  };
+  buckets: { range: string; count: number }[];
+  details: {
+    petId: string;
+    petName: string;
+    species: string;
+    breed: string | null;
+    inbreedingCoefficient: number;
+    riskLevel: string;
+  }[];
+}
+
+export interface DiseaseFrequencyItem {
+  disease: string;
+  species: string;
+  inheritance: string;
+  testedCount: number;
+  affectedCount: number;
+  carrierCount: number;
+  clearCount: number;
+  totalInSpecies: number;
+  detectionFrequency: number;
+  carrierFrequency: number;
+}
+
+export interface DashboardStats {
+  breedDistribution: BreedDistributionItem[];
+  markerCarrierRates: MarkerCarrierRateItem[];
+  inbreedingDistribution: InbreedingDistribution;
+  diseaseFrequencies: DiseaseFrequencyItem[];
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -455,6 +522,11 @@ export const breedingApi = {
 export const searchApi = {
   search: (query: string) =>
     api.get<any, SearchResponse>('/search', { params: { q: query } }),
+};
+
+export const dashboardApi = {
+  getStats: () =>
+    api.get<any, DashboardStats>('/dashboard/stats'),
 };
 
 export default api;
