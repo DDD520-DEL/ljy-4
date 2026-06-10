@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Pet {
+  id           String     @id @default(uuid())
+  name         String
+  species      String     // dog, cat, etc.
+  breed        String?
+  gender       String     // male, female, unknown
+  birthDate    DateTime?
+  color        String?
+  weight       Float?
+  description  String?
+  avatarUrl    String?
+  isBreeding   Boolean    @default(false)
+  status       String     @default("active")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  parentRelations  ParentRelation[] @relation("PetParentChild")
+  childRelations   ParentRelation[] @relation("PetChildParent")
+  geneReports      GeneReport[]
+  geneMarkers      GeneMarkerData[]
+  ownedBy          String?
+
+  breedingPairsAsMale   BreedingPair[] @relation("BreedingMale")
+  breedingPairsAsFemale BreedingPair[] @relation("BreedingFemale")
+  riskPredictions       RiskPrediction[]
+}
+
+model ParentRelation {
+  id        String   @id @default(uuid())
+  parentId  String
+  childId   String
+  relationType String // father, mother
+
+  parent    Pet      @relation("PetParentChild", fields: [parentId], references: [id], onDelete: Cascade)
+  child     Pet      @relation("PetChildParent", fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([parentId, childId, relationType])
+}
+
+model GeneReport {
+  id         String   @id @default(uuid())
+  petId      String
+  reportType String   // pdf, image
+  fileName   String
+  fileUrl    String?
+  parsedData String?
+  status     String   @default("pending") // pending, parsed, failed
+  uploadedAt DateTime @default(now())
+  parsedAt   DateTime?
+
+  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+
+model GeneticMarker {
+  id            String   @id @default(uuid())
+  markerName    String
+  geneName      String
+  chromosome    String?
+  position      Int?
+  variant       String
+  disease       String
+  species       String
+  inheritance   String   // autosomal_dominant, autosomal_recessive, x_linked, etc.
+  riskLevel     String   // high, medium, low
+  description   String?
+  reference     String?
+  createdAt     DateTime @default(now())
+
+  markerData    GeneMarkerData[]
+}
+
+model GeneMarkerData {
+  id           String   @id @default(uuid())
+  petId        String
+  markerId     String
+  genotype     String   // AA, Aa, aa, etc.
+  allele1      String?
+  allele2      String?
+  zygosity     String?  // homozygous, heterozygous, hemizygous
+  source       String?  // test_report, imputed, predicted
+  testedAt     DateTime?
+
+  pet          Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  marker       GeneticMarker @relation(fields: [markerId], references: [id], onDelete: Cascade)
+
+  @@unique([petId, markerId])
+}
+
+model RiskPrediction {
+  id              String   @id @default(uuid())
+  petId           String
+  disease         String
+  riskScore       Float
+  riskLevel       String   // low, medium, high
+  predictionType  String   // individual, offspring
+  parent1Id       String?
+  parent2Id       String?
+  details         String?
+  createdAt       DateTime @default(now())
+
+  pet             Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+
+model BreedingPair {
+  id         String   @id @default(uuid())
+  maleId     String
+  femaleId   String
+  name       String?
+  notes      String?
+  inbreedingCoefficient Float?
+  riskAssessment String?
+  status     String   @default("active")
+  createdAt  DateTime @default(now())
+
+  male       Pet      @relation("BreedingMale", fields: [maleId], references: [id])
+  female     Pet      @relation("BreedingFemale", fields: [femaleId], references: [id])
+}
