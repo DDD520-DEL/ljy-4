@@ -7,6 +7,15 @@ import { parseGeneReportPdf, parseGeneReportText, saveParsedReport, generateMock
 
 const router = Router();
 
+function parseParsedData(parsedData: string | null): any {
+  if (!parsedData) return null;
+  try {
+    return JSON.parse(parsedData);
+  } catch {
+    return parsedData;
+  }
+}
+
 const uploadDir = path.join(process.cwd(), 'uploads');
 fs.mkdir(uploadDir, { recursive: true }).catch(console.error);
 
@@ -43,7 +52,12 @@ router.get('/pet/:petId', async (req, res) => {
       orderBy: { uploadedAt: 'desc' },
     });
 
-    res.json(reports);
+    const parsedReports = reports.map((report) => ({
+      ...report,
+      parsedData: parseParsedData(report.parsedData),
+    }));
+
+    res.json(parsedReports);
   } catch (error) {
     console.error('获取基因报告列表失败:', error);
     res.status(500).json({ error: '获取基因报告列表失败' });
@@ -63,7 +77,10 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: '报告不存在' });
     }
 
-    res.json(report);
+    res.json({
+      ...report,
+      parsedData: parseParsedData(report.parsedData),
+    });
   } catch (error) {
     console.error('获取基因报告详情失败:', error);
     res.status(500).json({ error: '获取基因报告详情失败' });
@@ -96,7 +113,10 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
     });
 
     res.status(201).json({
-      report,
+      report: {
+        ...report,
+        parsedData: parseParsedData(report.parsedData),
+      },
       message: '文件上传成功，正在解析...',
     });
 
@@ -158,7 +178,17 @@ router.post('/mock/:petId', async (req, res) => {
       where: { id: report.id },
     });
 
-    res.status(201).json(updatedReport);
+    if (updatedReport) {
+      res.status(201).json({
+        ...updatedReport,
+        parsedData: parseParsedData(updatedReport.parsedData),
+      });
+    } else {
+      res.status(201).json({
+        ...report,
+        parsedData: mockData,
+      });
+    }
   } catch (error) {
     console.error('生成模拟基因报告失败:', error);
     res.status(500).json({ error: '生成模拟基因报告失败' });

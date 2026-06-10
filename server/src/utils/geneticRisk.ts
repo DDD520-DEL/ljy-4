@@ -337,7 +337,7 @@ export async function saveRiskPrediction(
       riskScore,
       riskLevel,
       predictionType,
-      details,
+      details: details !== undefined && details !== null ? JSON.stringify(details) : null,
     },
   });
 }

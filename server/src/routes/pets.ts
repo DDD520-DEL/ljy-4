@@ -4,6 +4,28 @@ import prisma from '../lib/prisma.js';
 
 const router = Router();
 
+function parseJsonString(jsonStr: string | null): any {
+  if (!jsonStr) return null;
+  try {
+    return JSON.parse(jsonStr);
+  } catch {
+    return jsonStr;
+  }
+}
+
+function transformPetGeneReports(pet: any): any {
+  if (pet.geneReports && Array.isArray(pet.geneReports)) {
+    return {
+      ...pet,
+      geneReports: pet.geneReports.map((report: any) => ({
+        ...report,
+        parsedData: parseJsonString(report.parsedData),
+      })),
+    };
+  }
+  return pet;
+}
+
 const petSchema = z.object({
   name: z.string().min(1),
   species: z.string().min(1),
@@ -88,7 +110,7 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: '宠物不存在' });
     }
 
-    res.json(pet);
+    res.json(transformPetGeneReports(pet));
   } catch (error) {
     console.error('获取宠物详情失败:', error);
     res.status(500).json({ error: '获取宠物详情失败' });

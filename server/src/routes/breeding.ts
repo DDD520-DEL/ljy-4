@@ -6,6 +6,38 @@ import { calculateOffspringRisk } from '../utils/geneticRisk.js';
 
 const router = Router();
 
+function getInbreedingInterpretation(coeff: number): string {
+  if (coeff === 0) {
+    return '无亲缘关系，近交风险极低。';
+  } else if (coeff <= 0.03125) {
+    return '远亲关系，近交风险较低，通常可接受。';
+  } else if (coeff <= 0.0625) {
+    return '表亲级亲缘关系，存在一定近交风险，建议谨慎考虑。';
+  } else if (coeff <= 0.125) {
+    return '半同胞或叔侄级亲缘关系，近交风险中等，可能增加遗传病概率。';
+  } else if (coeff <= 0.25) {
+    return '全同胞或亲子级亲缘关系，近交风险高，强烈不建议繁殖。';
+  } else {
+    return '极高近交风险，严重增加遗传病和健康问题概率，严禁繁殖。';
+  }
+}
+
+function getInbreedingRiskLevel(coeff: number): string {
+  if (coeff > 0.25) return 'very_high';
+  if (coeff > 0.125) return 'high';
+  if (coeff > 0.0625) return 'medium';
+  return 'low';
+}
+
+function parseRiskAssessment(riskAssessment: string | null): any {
+  if (!riskAssessment) return null;
+  try {
+    return JSON.parse(riskAssessment);
+  } catch {
+    return riskAssessment;
+  }
+}
+
 router.get('/breeding-pets', async (req, res) => {
   try {
     const { species, gender } = req.query;
@@ -145,7 +177,12 @@ router.get('/breeding-pairs', async (req, res) => {
       },
     });
 
-    res.json(pairs);
+    const parsedPairs = pairs.map((pair) => ({
+      ...pair,
+      riskAssessment: parseRiskAssessment(pair.riskAssessment),
+    }));
+
+    res.json(parsedPairs);
   } catch (error) {
     console.error('获取配种对列表失败:', error);
     res.status(500).json({ error: '获取配种对列表失败' });
@@ -196,7 +233,10 @@ router.post('/breeding-pairs', async (req, res) => {
       },
     });
 
-    res.status(201).json(pair);
+    res.status(201).json({
+      ...pair,
+      riskAssessment: parseRiskAssessment(pair.riskAssessment),
+    });
   } catch (error) {
     console.error('创建配种对失败:', error);
     res.status(500).json({ error: '创建配种对失败' });
@@ -215,28 +255,5 @@ router.delete('/breeding-pairs/:id', async (req, res) => {
     res.status(500).json({ error: '删除配种对失败' });
   }
 });
-
-function getInbreedingInterpretation(coeff: number): string {
-  if (coeff === 0) {
-    return '无亲缘关系，近交风险极低。';
-  } else if (coeff <= 0.03125) {
-    return '远亲关系，近交风险较低，通常可接受。';
-  } else if (coeff <= 0.0625) {
-    return '表亲级亲缘关系，存在一定近交风险，建议谨慎考虑。';
-  } else if (coeff <= 0.125) {
-    return '半同胞或叔侄级亲缘关系，近交风险中等，可能增加遗传病概率。';
-  } else if (coeff <= 0.25) {
-    return '全同胞或亲子级亲缘关系，近交风险高，强烈不建议繁殖。';
-  } else {
-    return '极高近交风险，严重增加遗传病和健康问题概率，严禁繁殖。';
-  }
-}
-
-function getInbreedingRiskLevel(coeff: number): string {
-  if (coeff > 0.25) return 'very_high';
-  if (coeff > 0.125) return 'high';
-  if (coeff > 0.0625) return 'medium';
-  return 'low';
-}
 
 export default router;
