@@ -7,6 +7,7 @@ import {
   Settings,
   Home,
 } from 'lucide-react';
+import SearchBar from './components/SearchBar';
 
 import PetList from './pages/PetList';
 import PetDetail from './pages/PetDetail';
@@ -80,8 +81,21 @@ function App() {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-auto">
-        <div className="p-8">
+      <main className="flex-1 overflow-auto flex flex-col">
+        <header className="bg-white border-b border-gray-200 px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                {getPageTitle(location.pathname)}
+              </h2>
+              <p className="text-sm text-gray-500">
+                {getPageSubtitle(location.pathname)}
+              </p>
+            </div>
+            <SearchBar />
+          </div>
+        </header>
+        <div className="flex-1 p-8 overflow-auto">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/pets" element={<PetList />} />
@@ -224,6 +238,38 @@ function FeatureItem({ title, description }: { title: string; description: strin
       </div>
     </div>
   );
+}
+
+function getPageTitle(pathname: string): string {
+  if (pathname === '/') return '首页';
+  if (pathname.startsWith('/pets/new')) return '添加宠物';
+  if (pathname.startsWith('/pets/') && pathname.includes('/edit')) return '编辑宠物';
+  if (pathname.startsWith('/pets/') && pathname.includes('/timeline')) return '时间轴';
+  if (pathname.startsWith('/pets/')) return '宠物详情';
+  if (pathname === '/pets') return '宠物管理';
+  if (pathname.startsWith('/pedigree')) return '谱系图';
+  if (pathname.startsWith('/gene-reports/')) return '基因报告详情';
+  if (pathname === '/gene-reports') return '基因报告';
+  if (pathname === '/risk-prediction') return '风险预测';
+  if (pathname.startsWith('/breeding/')) return '繁殖配对详情';
+  if (pathname === '/breeding') return '种畜管理';
+  return '宠物基因平台';
+}
+
+function getPageSubtitle(pathname: string): string {
+  if (pathname === '/') return '管理宠物信息，建立谱系关系，分析遗传风险';
+  if (pathname.startsWith('/pets/new')) return '填写新宠物的基本信息';
+  if (pathname.startsWith('/pets/') && pathname.includes('/edit')) return '修改宠物信息';
+  if (pathname.startsWith('/pets/') && pathname.includes('/timeline')) return '查看宠物成长历程';
+  if (pathname.startsWith('/pets/')) return '查看宠物详细信息和遗传数据';
+  if (pathname === '/pets') return '管理所有宠物的基本信息';
+  if (pathname.startsWith('/pedigree')) return '可视化展示宠物家族谱系关系';
+  if (pathname.startsWith('/gene-reports/')) return '查看基因检测报告详细解析';
+  if (pathname === '/gene-reports') return '上传和管理基因检测报告';
+  if (pathname === '/risk-prediction') return '分析遗传病风险和预测后代风险';
+  if (pathname.startsWith('/breeding/')) return '查看繁殖配对详细信息和风险评估';
+  if (pathname === '/breeding') return '管理种畜信息和繁殖配对';
+  return '宠物基因谱系平台';
 }
 
 export default App;

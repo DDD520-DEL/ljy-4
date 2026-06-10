@@ -277,6 +277,37 @@ export interface BreedingRecommendationsResponse {
   recommendations: BreedingRecommendation[];
 }
 
+export interface SearchResultPet {
+  id: string;
+  name: string;
+  species: string;
+  breed: string | null;
+  avatarUrl: string | null;
+}
+
+export interface SearchResultGeneMarker {
+  id: string;
+  markerName: string;
+  geneName: string;
+  disease: string;
+  species: string;
+}
+
+export interface SearchResultBreedingPair {
+  id: string;
+  name: string | null;
+  male: { id: string; name: string; breed: string | null };
+  female: { id: string; name: string; breed: string | null };
+}
+
+export interface SearchResponse {
+  pets: SearchResultPet[];
+  breeds: SearchResultPet[];
+  geneMarkers: SearchResultGeneMarker[];
+  diseases: SearchResultGeneMarker[];
+  breedingPairs: SearchResultBreedingPair[];
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -342,6 +373,11 @@ export const breedingApi = {
   removePair: (id: string) => api.delete<any, { message: string }>(`/breeding/breeding-pairs/${id}`),
   getRecommendations: (params?: { species?: string; maxInbreedingCoeff?: number; limit?: number }) =>
     api.get<any, BreedingRecommendationsResponse>('/breeding/recommendations', { params }),
+};
+
+export const searchApi = {
+  search: (query: string) =>
+    api.get<any, SearchResponse>('/search', { params: { q: query } }),
 };
 
 export default api;
