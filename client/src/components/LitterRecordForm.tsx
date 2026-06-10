@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X, Plus, Save, PawPrint, Heart, Trash2, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import {
   breedingApi,
@@ -6,6 +6,8 @@ import {
   HealthComparison,
   BreedingPair,
 } from '../services/api';
+
+type PuppyWithTempId = PuppyRecordInput & { _tempId: string };
 
 interface Props {
   pairId: string;
@@ -15,12 +17,15 @@ interface Props {
 }
 
 export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: Props) {
+  const idCounterRef = useRef(0);
+  const generateTempId = () => `puppy_${Date.now()}_${++idCounterRef.current}`;
+
   const [birthDate, setBirthDate] = useState(new Date().toISOString().split('T')[0]);
   const [totalCount, setTotalCount] = useState(0);
   const [aliveCount, setAliveCount] = useState(0);
   const [deadCount, setDeadCount] = useState(0);
   const [notes, setNotes] = useState('');
-  const [puppies, setPuppies] = useState<PuppyRecordInput[]>([]);
+  const [puppies, setPuppies] = useState<PuppyWithTempId[]>([]);
   const [saving, setSaving] = useState(false);
 
   const [healthComparison, setHealthComparison] = useState<HealthComparison>({
@@ -32,45 +37,40 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
 
   const riskAssessment = pair.riskAssessment as any;
 
-  const syncCounts = () => {
-    const alive = puppies.filter((p) => p.status !== 'dead').length;
-    const dead = puppies.filter((p) => p.status === 'dead').length;
+  const syncCountsFromList = (list: PuppyWithTempId[]) => {
+    const alive = list.filter((p) => p.status !== 'dead').length;
+    const dead = list.filter((p) => p.status === 'dead').length;
     setAliveCount(alive);
     setDeadCount(dead);
-    setTotalCount(puppies.length);
+    setTotalCount(list.length);
   };
 
   const addPuppy = () => {
-    const newPuppy: PuppyRecordInput = {
+    const newPuppy: PuppyWithTempId = {
+      _tempId: generateTempId(),
       gender: 'male',
       status: 'alive',
       healthStatus: 'normal',
     };
-    setPuppies([...puppies, newPuppy]);
-    syncCounts();
+    const newList = [...puppies, newPuppy];
+    setPuppies(newList);
+    syncCountsFromList(newList);
   };
 
-  const updatePuppy = (index: number, field: keyof PuppyRecordInput, value: any) => {
-    const updated = [...puppies];
-    updated[index] = { ...updated[index], [field]: value };
+  const updatePuppy = (tempId: string, field: keyof PuppyRecordInput, value: any) => {
+    const updated = puppies.map((p) =>
+      p._tempId === tempId ? { ...p, [field]: value } : p
+    );
     setPuppies(updated);
     if (field === 'status') {
-      const alive = updated.filter((p) => p.status !== 'dead').length;
-      const dead = updated.filter((p) => p.status === 'dead').length;
-      setAliveCount(alive);
-      setDeadCount(dead);
-      setTotalCount(updated.length);
+      syncCountsFromList(updated);
     }
   };
 
-  const removePuppy = (index: number) => {
-    const updated = puppies.filter((_, i) => i !== index);
+  const removePuppy = (tempId: string) => {
+    const updated = puppies.filter((p) => p._tempId !== tempId);
     setPuppies(updated);
-    const alive = updated.filter((p) => p.status !== 'dead').length;
-    const dead = updated.filter((p) => p.status === 'dead').length;
-    setAliveCount(alive);
-    setDeadCount(dead);
-    setTotalCount(updated.length);
+    syncCountsFromList(updated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,13 +87,16 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
 
     setSaving(true);
     try {
+      const puppiesForSubmit: PuppyRecordInput[] = puppies.map(
+        ({ _tempId, ...rest }) => rest
+      );
       await breedingApi.createLitter(pairId, {
         birthDate,
         totalCount: totalCount || puppies.length,
         aliveCount,
         deadCount,
         notes: notes || undefined,
-        puppies,
+        puppies: puppiesForSubmit,
         healthComparison:
           healthComparison.predictedRisks?.length ||
           healthComparison.actualHealthIssues?.length ||
@@ -232,7 +235,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                 <div className="space-y-3">
                   {puppies.map((puppy, index) => (
                     <div
-                      key={index}
+                      key={puppy._tempId}
                       className={`border rounded-xl p-4 ${
                         puppy.status === 'dead'
                           ? 'bg-red-50/50 border-red-200'
@@ -250,7 +253,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                         </div>
                         <button
                           type="button"
-                          onClick={() => removePuppy(index)}
+                          onClick={() => removePuppy(puppy._tempId)}
                           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -262,7 +265,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                           <input
                             type="text"
                             value={puppy.name || ''}
-                            onChange={(e) => updatePuppy(index, 'name', e.target.value)}
+                            onChange={(e) => updatePuppy(puppy._tempId, 'name', e.target.value)}
                             placeholder="可选"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           />
@@ -271,7 +274,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                           <label className="block text-xs text-gray-500 mb-1">性别</label>
                           <select
                             value={puppy.gender}
-                            onChange={(e) => updatePuppy(index, 'gender', e.target.value)}
+                            onChange={(e) => updatePuppy(puppy._tempId, 'gender', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           >
                             <option value="male">♂ 雄</option>
@@ -288,7 +291,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                             value={puppy.birthWeight || ''}
                             onChange={(e) =>
                               updatePuppy(
-                                index,
+                                puppy._tempId,
                                 'birthWeight',
                                 e.target.value ? parseFloat(e.target.value) : undefined
                               )
@@ -302,7 +305,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                           <input
                             type="text"
                             value={puppy.color || ''}
-                            onChange={(e) => updatePuppy(index, 'color', e.target.value)}
+                            onChange={(e) => updatePuppy(puppy._tempId, 'color', e.target.value)}
                             placeholder="可选"
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           />
@@ -311,7 +314,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                           <label className="block text-xs text-gray-500 mb-1">状态</label>
                           <select
                             value={puppy.status || 'alive'}
-                            onChange={(e) => updatePuppy(index, 'status', e.target.value)}
+                            onChange={(e) => updatePuppy(puppy._tempId, 'status', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           >
                             <option value="alive">存活</option>
@@ -322,7 +325,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                           <label className="block text-xs text-gray-500 mb-1">健康状态</label>
                           <select
                             value={puppy.healthStatus || 'normal'}
-                            onChange={(e) => updatePuppy(index, 'healthStatus', e.target.value)}
+                            onChange={(e) => updatePuppy(puppy._tempId, 'healthStatus', e.target.value)}
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           >
                             <option value="normal">正常</option>
@@ -338,7 +341,7 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
                           <input
                             type="text"
                             value={puppy.healthNotes || ''}
-                            onChange={(e) => updatePuppy(index, 'healthNotes', e.target.value)}
+                            onChange={(e) => updatePuppy(puppy._tempId, 'healthNotes', e.target.value)}
                             placeholder="描述具体的健康问题..."
                             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                           />
@@ -466,26 +469,25 @@ export default function LitterRecordForm({ pairId, pair, onClose, onSuccess }: P
               </div>
             </div>
           </div>
-        </form>
 
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            onClick={handleSubmit}
-            disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50"
-          >
-            <Save className="w-4 h-4" />
-            {saving ? '保存中...' : '保存记录'}
-          </button>
-        </div>
+          <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-5 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? '保存中...' : '保存记录'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
