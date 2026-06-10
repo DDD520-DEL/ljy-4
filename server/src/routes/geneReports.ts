@@ -2,8 +2,14 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs/promises';
+import { createRequire } from 'module';
+import ExcelJS from 'exceljs';
 import prisma from '../lib/prisma.js';
 import { parseGeneReportPdf, parseGeneReportText, saveParsedReport, generateMockGeneReport } from '../utils/geneParser.js';
+import { getPetGeneticMarkers, calculateIndividualRisk } from '../utils/geneticRisk.js';
+
+const require = createRequire(import.meta.url);
+const archiver = require('archiver');
 
 const router = Router();
 
@@ -211,6 +217,161 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('删除基因报告失败:', error);
     res.status(500).json({ error: '删除基因报告失败' });
+  }
+});
+
+router.post('/batch-export', async (req, res) => {
+  try {
+    const { reportIds } = req.body as { reportIds: string[] };
+
+    if (!reportIds || !Array.isArray(reportIds) || reportIds.length === 0) {
+      return res.status(400).json({ error: '请选择至少一份报告' });
+    }
+
+    const reports = await prisma.geneReport.findMany({
+      where: { id: { in: reportIds } },
+      include: { pet: true },
+    });
+
+    if (reports.length === 0) {
+      return res.status(404).json({ error: '未找到指定报告' });
+    }
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=gene-reports-export-${Date.now()}.zip`
+    );
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    archive.pipe(res);
+
+    archive.on('error', (err) => {
+      console.error('ZIP打包失败:', err);
+      res.status(500).json({ error: '打包失败' });
+    });
+
+    const petRiskMap = new Map<string, any[]>();
+
+    for (const report of reports) {
+      const petName = report.pet.name;
+      const safePetName = petName.replace(/[<>:"/\\|?*]/g, '_');
+      const reportDir = `${safePetName}_${report.id.slice(0, 8)}`;
+
+      if (report.fileUrl) {
+        const filePath = path.join(process.cwd(), report.fileUrl);
+        try {
+          await fs.access(filePath);
+          archive.file(filePath, { name: `${reportDir}/${report.fileName}` });
+        } catch {
+          // original file may not exist
+        }
+      }
+
+      if (report.parsedData) {
+        const parsedData = parseParsedData(report.parsedData);
+        archive.append(JSON.stringify(parsedData, null, 2), {
+          name: `${reportDir}/parsed_result.json`,
+        });
+      }
+
+      try {
+        const markers = await getPetGeneticMarkers(report.petId);
+        const riskResults = markers.map((marker) => {
+          const risk = calculateIndividualRisk(marker);
+          return {
+            petName: report.pet.name,
+            petBreed: report.pet.breed || '',
+            petSpecies: report.pet.species,
+            markerName: marker.markerName,
+            geneName: marker.geneName,
+            disease: marker.disease,
+            inheritance: marker.inheritance,
+            genotype: marker.genotype || '未检测',
+            zygosity: marker.zygosity || '',
+            riskScore: risk.riskScore,
+            riskLevel: risk.riskLevel,
+            explanation: risk.explanation,
+          };
+        });
+        petRiskMap.set(report.petId, riskResults);
+      } catch {
+        // skip risk calculation on error
+      }
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('基因检测汇总');
+
+    sheet.columns = [
+      { header: '宠物名称', key: 'petName', width: 14 },
+      { header: '品种', key: 'petBreed', width: 14 },
+      { header: '物种', key: 'petSpecies', width: 8 },
+      { header: '检测位点', key: 'markerName', width: 14 },
+      { header: '基因名', key: 'geneName', width: 12 },
+      { header: '相关疾病', key: 'disease', width: 20 },
+      { header: '遗传模式', key: 'inheritance', width: 18 },
+      { header: '基因型', key: 'genotype', width: 10 },
+      { header: '合子状态', key: 'zygosity', width: 14 },
+      { header: '风险分数', key: 'riskScore', width: 10 },
+      { header: '风险等级', key: 'riskLevel', width: 10 },
+      { header: '风险说明', key: 'explanation', width: 50 },
+    ];
+
+    const headerRow = sheet.getRow(1);
+    headerRow.font = { bold: true, size: 11 };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE2E8F0' },
+    };
+    headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    for (const [, riskResults] of petRiskMap) {
+      for (const row of riskResults) {
+        const addedRow = sheet.addRow(row);
+
+        const riskLevel = row.riskLevel;
+        let fillColor: string;
+        switch (riskLevel) {
+          case 'high':
+            fillColor = 'FFFEE2E2';
+            break;
+          case 'medium':
+            fillColor = 'FFFFF7ED';
+            break;
+          case 'carrier':
+            fillColor = 'FFFEF9C3';
+            break;
+          case 'low':
+            fillColor = 'FFF0FDF4';
+            break;
+          default:
+            fillColor = 'FFF1F5F9';
+        }
+
+        addedRow.eachCell((cell) => {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: fillColor },
+          };
+        });
+
+        const riskCell = addedRow.getCell('riskLevel');
+        riskCell.font = { bold: true };
+      }
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    archive.append(buffer as Buffer, { name: '基因检测汇总表.xlsx' });
+
+    await archive.finalize();
+  } catch (error) {
+    console.error('批量导出失败:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: '批量导出失败' });
+    }
   }
 });
 

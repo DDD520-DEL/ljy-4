@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Clock, Trash2, Dna, Plus } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Clock, Trash2, Dna, Plus, Download, CheckSquare, Square } from 'lucide-react';
 import { geneReportApi, petApi, GeneReport, Pet } from '../services/api';
 
 export default function GeneReports() {
@@ -8,6 +8,8 @@ export default function GeneReports() {
   const [reports, setReports] = useState<GeneReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -18,6 +20,10 @@ export default function GeneReports() {
     if (selectedPet) {
       loadReports();
     }
+  }, [selectedPet]);
+
+  useEffect(() => {
+    setSelectedIds(new Set());
   }, [selectedPet]);
 
   async function loadPets() {
@@ -84,10 +90,63 @@ export default function GeneReports() {
     try {
       await geneReportApi.remove(id);
       loadReports();
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     } catch (error) {
       alert('删除失败');
     }
   }
+
+  async function handleBatchExport() {
+    if (selectedIds.size === 0) {
+      alert('请先选择要导出的报告');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const response = await geneReportApi.batchExport(Array.from(selectedIds));
+      const blob = new Blob([response.data], { type: 'application/zip' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gene-reports-export-${Date.now()}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('批量导出失败:', error);
+      alert('导出失败，请重试');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    if (selectedIds.size === reports.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(reports.map((r) => r.id)));
+    }
+  }
+
+  const isAllSelected = reports.length > 0 && selectedIds.size === reports.length;
 
   const currentPet = pets.find((p) => p.id === selectedPet);
 
@@ -222,8 +281,33 @@ export default function GeneReports() {
 
         <div className="lg:col-span-3">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">检测报告列表</h2>
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <h2 className="font-semibold text-gray-900">检测报告列表</h2>
+                {reports.length > 0 && (
+                  <button
+                    onClick={toggleSelectAll}
+                    className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-primary-600 transition-colors"
+                  >
+                    {isAllSelected ? (
+                      <CheckSquare className="w-4 h-4 text-primary-600" />
+                    ) : (
+                      <Square className="w-4 h-4" />
+                    )}
+                    {isAllSelected ? '取消全选' : '全选'}
+                  </button>
+                )}
+              </div>
+              {selectedIds.size > 0 && (
+                <button
+                  onClick={handleBatchExport}
+                  disabled={exporting}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download className="w-4 h-4" />
+                  {exporting ? '导出中...' : `导出选中 (${selectedIds.size})`}
+                </button>
+              )}
             </div>
 
             <div className="p-6">
@@ -242,9 +326,23 @@ export default function GeneReports() {
                   {reports.map((report) => (
                     <div
                       key={report.id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                      className={`flex items-center justify-between p-4 border rounded-lg transition-colors ${
+                        selectedIds.has(report.id)
+                          ? 'border-primary-300 bg-primary-50'
+                          : 'border-gray-200 hover:bg-gray-50'
+                      }`}
                     >
                       <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => toggleSelect(report.id)}
+                          className="flex-shrink-0 text-gray-400 hover:text-primary-600 transition-colors"
+                        >
+                          {selectedIds.has(report.id) ? (
+                            <CheckSquare className="w-5 h-5 text-primary-600" />
+                          ) : (
+                            <Square className="w-5 h-5" />
+                          )}
+                        </button>
                         <div className="w-12 h-12 bg-primary-50 rounded-lg flex items-center justify-center">
                           <FileText className="w-6 h-6 text-primary-600" />
                         </div>

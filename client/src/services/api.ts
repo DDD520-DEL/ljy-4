@@ -346,6 +346,13 @@ export const geneReportApi = {
   },
   createMock: (petId: string) => api.post<any, GeneReport>(`/gene-reports/mock/${petId}`),
   remove: (id: string) => api.delete<any, { message: string }>(`/gene-reports/${id}`),
+  batchExport: async (reportIds: string[]) => {
+    const response = await axios.post('/api/gene-reports/batch-export', { reportIds }, {
+      responseType: 'blob',
+      timeout: 120000,
+    });
+    return response;
+  },
 };
 
 export const geneticsApi = {
