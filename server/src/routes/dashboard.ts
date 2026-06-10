@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import prisma from '../lib/prisma.js';
 import { calculateInbreedingCoefficient } from '../utils/inbreeding.js';
+import { aggregateDiseaseByPet } from '../utils/diseaseAggregation.js';
 
 const router = Router();
 
@@ -259,49 +260,11 @@ async function computeDiseaseFrequencies() {
     speciesTotalMap.set(sc.species, sc._count.id);
   }
 
-  const diseaseMap = new Map<string, {
-    disease: string;
-    species: string;
-    inheritance: string;
-    testedCount: number;
-    affectedCount: number;
-    carrierCount: number;
-    clearCount: number;
-  }>();
+  const aggregated = aggregateDiseaseByPet(
+    markerData as any[]
+  );
 
-  for (const md of markerData) {
-    const key = `${md.marker.disease}|${md.marker.species}`;
-    if (!diseaseMap.has(key)) {
-      diseaseMap.set(key, {
-        disease: md.marker.disease,
-        species: md.marker.species,
-        inheritance: md.marker.inheritance,
-        testedCount: 0,
-        affectedCount: 0,
-        carrierCount: 0,
-        clearCount: 0,
-      });
-    }
-    const entry = diseaseMap.get(key)!;
-    entry.testedCount++;
-
-    const isCarrier =
-      md.zygosity === 'heterozygous' ||
-      md.genotype === 'N/M' ||
-      md.genotype === 'N/m';
-    const isAffected =
-      md.zygosity === 'homozygous' ||
-      md.genotype === 'M/M' ||
-      md.genotype === 'm/m';
-    const isClear =
-      md.zygosity === null && md.genotype === 'N/N';
-
-    if (isAffected) entry.affectedCount++;
-    else if (isCarrier) entry.carrierCount++;
-    else if (isClear) entry.clearCount++;
-  }
-
-  return Array.from(diseaseMap.values()).map((d) => {
+  return aggregated.map((d) => {
     const totalInSpecies = speciesTotalMap.get(d.species) || 0;
     const detectionFrequency = totalInSpecies > 0
       ? d.affectedCount / totalInSpecies
