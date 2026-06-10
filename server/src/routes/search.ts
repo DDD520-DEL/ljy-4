@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
 
     const keyword = q.trim();
 
-    const [pets, breeds, geneMarkers, diseases, breedingPairs] = await Promise.all([
+    const [nameMatchedPets, breedMatchedPets, geneMarkers, diseaseMatchedMarkers, breedingPairs] = await Promise.all([
       prisma.pet.findMany({
         where: {
           name: {
@@ -102,37 +102,29 @@ router.get('/', async (req, res) => {
       }),
     ]);
 
-    const seenBreedIds = new Set<string>();
-    const uniqueBreeds = breeds.filter((pet) => {
-      if (seenBreedIds.has(pet.id)) return false;
-      seenBreedIds.add(pet.id);
-      return true;
-    });
+    const nameMatchedPetIds = new Set(nameMatchedPets.map((pet) => pet.id));
+    const filteredBreedMatchedPets = breedMatchedPets.filter(
+      (pet) => !nameMatchedPetIds.has(pet.id)
+    );
 
-    const uniquePets = pets.filter((pet) => !seenBreedIds.has(pet.id));
-
-    const seenGeneMarkerIds = new Set<string>();
-    const uniqueGeneMarkers = geneMarkers.filter((marker) => {
-      if (seenGeneMarkerIds.has(marker.id)) return false;
-      seenGeneMarkerIds.add(marker.id);
-      return true;
-    });
-
-    const uniqueDiseases = diseases.filter((marker) => !seenGeneMarkerIds.has(marker.id));
+    const geneMarkerIds = new Set(geneMarkers.map((marker) => marker.id));
+    const filteredDiseaseMatchedMarkers = diseaseMatchedMarkers.filter(
+      (marker) => !geneMarkerIds.has(marker.id)
+    );
 
     res.json({
-      pets: uniquePets,
-      breeds: uniqueBreeds,
-      geneMarkers: uniqueGeneMarkers,
-      diseases: uniqueDiseases,
+      pets: nameMatchedPets,
+      breeds: filteredBreedMatchedPets,
+      geneMarkers,
+      diseases: filteredDiseaseMatchedMarkers,
       breedingPairs,
     });
   } catch (error) {
     console.error('搜索失败:', error);
     console.error('错误详情:', JSON.stringify(error, null, 2));
-    res.status(500).json({ 
+    res.status(500).json({
       error: '搜索失败',
-      details: error instanceof Error ? error.message : String(error)
+      details: error instanceof Error ? error.message : String(error),
     });
   }
 });

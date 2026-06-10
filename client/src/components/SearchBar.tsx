@@ -33,8 +33,12 @@ const SearchBar: React.FC = () => {
       try {
         const data = await searchApi.search(query.trim());
         setResults(data);
-      } catch (error: any) {
-        console.error('搜索失败:', error);
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          console.error('搜索失败:', error.message);
+        } else {
+          console.error('搜索失败:', error);
+        }
       } finally {
         setIsLoading(false);
       }
