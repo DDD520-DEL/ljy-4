@@ -12,8 +12,13 @@ import {
   Trash2,
   Plus,
   Clock,
+  Repeat,
+  User,
+  Phone,
+  Search,
+  X,
 } from 'lucide-react';
-import { petApi, geneReportApi, geneticsApi, Pet, RiskSummary } from '../services/api';
+import { petApi, geneReportApi, geneticsApi, Pet, RiskSummary, PetTransfer } from '../services/api';
 
 export default function PetDetail() {
   const { id } = useParams<{ id: string }>();
@@ -21,7 +26,20 @@ export default function PetDetail() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'transfers'>('info');
+  const [transfers, setTransfers] = useState<PetTransfer[]>([]);
+  const [transfersLoading, setTransfersLoading] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [ownerFilter, setOwnerFilter] = useState('');
+  const [editingTransfer, setEditingTransfer] = useState<PetTransfer | null>(null);
+  const [formData, setFormData] = useState({
+    fromOwnerName: '',
+    fromOwnerContact: '',
+    toOwnerName: '',
+    toOwnerContact: '',
+    transferDate: new Date().toISOString().split('T')[0],
+    notes: '',
+  });
 
   useEffect(() => {
     if (id) {
@@ -29,6 +47,82 @@ export default function PetDetail() {
       loadRisk();
     }
   }, [id]);
+
+  useEffect(() => {
+    if (id && activeTab === 'transfers') {
+      loadTransfers();
+    }
+  }, [id, activeTab, ownerFilter]);
+
+  async function loadTransfers() {
+    if (!id) return;
+    setTransfersLoading(true);
+    try {
+      const data = await petApi.listTransfers(id, ownerFilter || undefined);
+      setTransfers(data);
+    } catch (error) {
+      console.error('加载流转记录失败:', error);
+    } finally {
+      setTransfersLoading(false);
+    }
+  }
+
+  function resetForm() {
+    setFormData({
+      fromOwnerName: '',
+      fromOwnerContact: '',
+      toOwnerName: '',
+      toOwnerContact: '',
+      transferDate: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+    setEditingTransfer(null);
+    setShowAddForm(false);
+  }
+
+  function handleEditTransfer(transfer: PetTransfer) {
+    setEditingTransfer(transfer);
+    setFormData({
+      fromOwnerName: transfer.fromOwnerName,
+      fromOwnerContact: transfer.fromOwnerContact || '',
+      toOwnerName: transfer.toOwnerName,
+      toOwnerContact: transfer.toOwnerContact || '',
+      transferDate: transfer.transferDate.split('T')[0],
+      notes: transfer.notes || '',
+    });
+    setShowAddForm(true);
+  }
+
+  async function handleSubmitTransfer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+
+    try {
+      if (editingTransfer) {
+        await petApi.updateTransfer(id, editingTransfer.id, formData);
+      } else {
+        await petApi.createTransfer(id, formData);
+      }
+      resetForm();
+      loadTransfers();
+    } catch (error) {
+      console.error('保存流转记录失败:', error);
+      alert('保存失败，请重试');
+    }
+  }
+
+  async function handleDeleteTransfer(transferId: string) {
+    if (!id) return;
+    if (!confirm('确定要删除这条流转记录吗？')) return;
+
+    try {
+      await petApi.removeTransfer(id, transferId);
+      loadTransfers();
+    } catch (error) {
+      console.error('删除流转记录失败:', error);
+      alert('删除失败，请重试');
+    }
+  }
 
   async function loadPet() {
     if (!id) return;
@@ -167,6 +261,7 @@ export default function PetDetail() {
                 { key: 'relations', label: '亲属关系', icon: Network },
                 { key: 'genes', label: '基因标记', icon: Dna },
                 { key: 'reports', label: '基因报告', icon: FileText },
+                { key: 'transfers', label: '流转记录', icon: Repeat },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
@@ -455,6 +550,247 @@ export default function PetDetail() {
                           </span>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'transfers' && (
+                <div>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <h3 className="text-sm font-medium text-gray-900">宠物流转记录</h3>
+                    <div className="flex gap-2 w-full sm:w-auto">
+                      <div className="relative flex-1 sm:w-48">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                        <input
+                          type="text"
+                          placeholder="按饲主姓名筛选..."
+                          value={ownerFilter}
+                          onChange={(e) => setOwnerFilter(e.target.value)}
+                          className="w-full pl-9 pr-8 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                        />
+                        {ownerFilter && (
+                          <button
+                            onClick={() => setOwnerFilter('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          resetForm();
+                          setShowAddForm(true);
+                        }}
+                        className="flex items-center gap-1 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
+                      >
+                        <Plus className="w-4 h-4" />
+                        添加记录
+                      </button>
+                    </div>
+                  </div>
+
+                  {showAddForm && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-medium text-gray-900">
+                          {editingTransfer ? '编辑流转记录' : '添加流转记录'}
+                        </h4>
+                        <button
+                          onClick={resetForm}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSubmitTransfer} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              原饲主姓名 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={formData.fromOwnerName}
+                              onChange={(e) => setFormData({ ...formData, fromOwnerName: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="请输入原饲主姓名"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              原饲主联系方式
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.fromOwnerContact}
+                              onChange={(e) => setFormData({ ...formData, fromOwnerContact: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="电话/微信等"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              新饲主姓名 <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              value={formData.toOwnerName}
+                              onChange={(e) => setFormData({ ...formData, toOwnerName: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="请输入新饲主姓名"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              新饲主联系方式
+                            </label>
+                            <input
+                              type="text"
+                              value={formData.toOwnerContact}
+                              onChange={(e) => setFormData({ ...formData, toOwnerContact: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="电话/微信等"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            转让日期 <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={formData.transferDate}
+                            onChange={(e) => setFormData({ ...formData, transferDate: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            备注
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={formData.notes}
+                            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                            placeholder="转让原因、条件等备注信息..."
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={resetForm}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                          >
+                            取消
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                          >
+                            {editingTransfer ? '保存修改' : '添加记录'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {transfersLoading ? (
+                    <div className="text-center py-8 text-gray-500">加载中...</div>
+                  ) : transfers.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Repeat className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">
+                        {ownerFilter ? '未找到匹配的流转记录' : '暂无流转记录'}
+                      </p>
+                      {ownerFilter && (
+                        <button
+                          onClick={() => setOwnerFilter('')}
+                          className="mt-2 text-sm text-primary-600 hover:underline"
+                        >
+                          清除筛选条件
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                      <div className="space-y-6">
+                        {transfers.map((transfer, index) => (
+                          <div key={transfer.id} className="relative pl-12">
+                            <div className="absolute left-2 w-5 h-5 bg-primary-500 rounded-full border-4 border-white shadow flex items-center justify-center">
+                              <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
+                            </div>
+                            {index < transfers.length - 1 && (
+                              <div className="absolute left-4 top-6 w-0.5 h-full bg-gray-200"></div>
+                            )}
+                            <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <div className="flex items-center gap-2 text-sm text-gray-500 mb-1">
+                                    <Calendar className="w-4 h-4" />
+                                    {new Date(transfer.transferDate).toLocaleDateString('zh-CN')}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
+                                      {transfer.fromOwnerName}
+                                    </span>
+                                    <Repeat className="w-4 h-4 text-primary-500" />
+                                    <span className="px-2 py-1 bg-primary-50 text-primary-700 rounded text-sm font-medium">
+                                      {transfer.toOwnerName}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleEditTransfer(transfer)}
+                                    className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                                    title="编辑"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteTransfer(transfer.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="删除"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                                {transfer.fromOwnerContact && (
+                                  <div className="flex items-center gap-2 text-gray-600">
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    <span>原饲主: {transfer.fromOwnerContact}</span>
+                                  </div>
+                                )}
+                                {transfer.toOwnerContact && (
+                                  <div className="flex items-center gap-2 text-gray-600">
+                                    <Phone className="w-4 h-4 text-gray-400" />
+                                    <span>新饲主: {transfer.toOwnerContact}</span>
+                                  </div>
+                                )}
+                              </div>
+                              {transfer.notes && (
+                                <div className="pt-3 border-t border-gray-100">
+                                  <p className="text-sm text-gray-600">
+                                    <span className="font-medium text-gray-700">备注：</span>
+                                    {transfer.notes}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

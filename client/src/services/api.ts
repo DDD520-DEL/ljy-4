@@ -235,6 +235,18 @@ export interface WeightRecord {
   createdAt: string;
 }
 
+export interface PetTransfer {
+  id: string;
+  petId: string;
+  fromOwnerName: string;
+  fromOwnerContact: string | null;
+  toOwnerName: string;
+  toOwnerContact: string | null;
+  transferDate: string;
+  notes: string | null;
+  createdAt: string;
+}
+
 export type TimelineEventType = 'weight' | 'gene' | 'breeding';
 
 export interface TimelineEvent {
@@ -449,6 +461,14 @@ export const petApi = {
     api.put<any, WeightRecord>(`/pets/${id}/weights/${recordId}`, data),
   removeWeight: (id: string, recordId: string) =>
     api.delete<any, { message: string }>(`/pets/${id}/weights/${recordId}`),
+  listTransfers: (id: string, owner?: string) =>
+    api.get<any, PetTransfer[]>(`/pets/${id}/transfers`, { params: { owner } }),
+  createTransfer: (id: string, data: Partial<PetTransfer>) =>
+    api.post<any, PetTransfer>(`/pets/${id}/transfers`, data),
+  updateTransfer: (id: string, recordId: string, data: Partial<PetTransfer>) =>
+    api.put<any, PetTransfer>(`/pets/${id}/transfers/${recordId}`, data),
+  removeTransfer: (id: string, recordId: string) =>
+    api.delete<any, { message: string }>(`/pets/${id}/transfers/${recordId}`),
 };
 
 export const relationApi = {

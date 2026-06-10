@@ -46,6 +46,15 @@ const weightRecordSchema = z.object({
   note: z.string().optional().nullable(),
 });
 
+const petTransferSchema = z.object({
+  fromOwnerName: z.string().min(1),
+  fromOwnerContact: z.string().optional().nullable(),
+  toOwnerName: z.string().min(1),
+  toOwnerContact: z.string().optional().nullable(),
+  transferDate: z.string().min(1),
+  notes: z.string().optional().nullable(),
+});
+
 router.get('/', async (req, res) => {
   try {
     const { species, breed, gender, isBreeding, search } = req.query;
@@ -554,5 +563,113 @@ function parseRiskAssessment(riskAssessment: string | null): any {
     return riskAssessment;
   }
 }
+
+router.get('/:id/transfers', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { owner } = req.query;
+
+    const pet = await prisma.pet.findUnique({ where: { id } });
+    if (!pet) {
+      return res.status(404).json({ error: '宠物不存在' });
+    }
+
+    const where: any = { petId: id };
+    if (owner) {
+      where.OR = [
+        { fromOwnerName: { contains: owner as string } },
+        { toOwnerName: { contains: owner as string } },
+      ];
+    }
+
+    const records = await prisma.petTransfer.findMany({
+      where,
+      orderBy: { transferDate: 'desc' },
+    });
+
+    res.json(records);
+  } catch (error) {
+    console.error('获取流转记录失败:', error);
+    res.status(500).json({ error: '获取流转记录失败' });
+  }
+});
+
+router.post('/:id/transfers', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = petTransferSchema.parse(req.body);
+
+    const pet = await prisma.pet.findUnique({ where: { id } });
+    if (!pet) {
+      return res.status(404).json({ error: '宠物不存在' });
+    }
+
+    const record = await prisma.petTransfer.create({
+      data: {
+        petId: id,
+        fromOwnerName: data.fromOwnerName,
+        fromOwnerContact: data.fromOwnerContact,
+        toOwnerName: data.toOwnerName,
+        toOwnerContact: data.toOwnerContact,
+        transferDate: new Date(data.transferDate),
+        notes: data.notes,
+      },
+    });
+
+    res.status(201).json(record);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: '数据验证失败', details: error.errors });
+    }
+    console.error('创建流转记录失败:', error);
+    res.status(500).json({ error: '创建流转记录失败' });
+  }
+});
+
+router.put('/:id/transfers/:recordId', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const data = petTransferSchema.partial().parse(req.body);
+
+    const record = await prisma.petTransfer.findUnique({ where: { id: recordId } });
+    if (!record) {
+      return res.status(404).json({ error: '记录不存在' });
+    }
+
+    const updated = await prisma.petTransfer.update({
+      where: { id: recordId },
+      data: {
+        ...data,
+        transferDate: data.transferDate ? new Date(data.transferDate) : undefined,
+      },
+    });
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: '数据验证失败', details: error.errors });
+    }
+    console.error('更新流转记录失败:', error);
+    res.status(500).json({ error: '更新流转记录失败' });
+  }
+});
+
+router.delete('/:id/transfers/:recordId', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+
+    const record = await prisma.petTransfer.findUnique({ where: { id: recordId } });
+    if (!record) {
+      return res.status(404).json({ error: '记录不存在' });
+    }
+
+    await prisma.petTransfer.delete({ where: { id: recordId } });
+
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除流转记录失败:', error);
+    res.status(500).json({ error: '删除流转记录失败' });
+  }
+});
 
 export default router;

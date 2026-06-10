@@ -34,6 +34,7 @@ model Pet {
   riskPredictions       RiskPrediction[]
   weightRecords         WeightRecord[]
   puppyRecords          PuppyRecord[]
+  transferRecords       PetTransfer[]
 }
 
 model ParentRelation {
@@ -172,4 +173,18 @@ model PuppyRecord {
 
   litterRecord    LitterRecord @relation(fields: [litterRecordId], references: [id], onDelete: Cascade)
   pet             Pet?         @relation(fields: [petId], references: [id], onDelete: SetNull)
+}
+
+model PetTransfer {
+  id              String   @id @default(uuid())
+  petId           String
+  fromOwnerName   String
+  fromOwnerContact String?
+  toOwnerName     String
+  toOwnerContact  String?
+  transferDate    DateTime
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  pet             Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
 }
