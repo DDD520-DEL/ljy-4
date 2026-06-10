@@ -256,4 +256,190 @@ router.delete('/breeding-pairs/:id', async (req, res) => {
   }
 });
 
+router.get('/recommendations', async (req, res) => {
+  try {
+    const { species, maxInbreedingCoeff, limit } = req.query;
+
+    const maxInbreeding = maxInbreedingCoeff
+      ? parseFloat(maxInbreedingCoeff as string)
+      : 0.0625;
+    const resultLimit = limit ? parseInt(limit as string) : 20;
+
+    const where: any = {
+      isBreeding: true,
+      status: 'active',
+    };
+
+    if (species && species !== 'all') {
+      where.species = species as string;
+    }
+
+    const breedingPets = await prisma.pet.findMany({
+      where,
+      orderBy: [{ species: 'asc' }, { name: 'asc' }],
+      include: {
+        geneMarkers: {
+          include: { marker: true },
+        },
+        childRelations: {
+          include: { parent: true },
+        },
+      },
+    });
+
+    const speciesGroups = new Map<string, { males: typeof breedingPets; females: typeof breedingPets }>();
+
+    for (const pet of breedingPets) {
+      if (!speciesGroups.has(pet.species)) {
+        speciesGroups.set(pet.species, { males: [], females: [] });
+      }
+      const group = speciesGroups.get(pet.species)!;
+      if (pet.gender === 'male') {
+        group.males.push(pet);
+      } else if (pet.gender === 'female') {
+        group.females.push(pet);
+      }
+    }
+
+    const recommendations: any[] = [];
+
+    for (const [sp, group] of speciesGroups) {
+      const { males, females } = group;
+
+      for (const male of males) {
+        for (const female of females) {
+          try {
+            const inbreedingCoeff = await calculatePairInbreeding(male.id, female.id);
+
+            if (inbreedingCoeff > maxInbreeding) {
+              continue;
+            }
+
+            const offspringRisk = await calculateOffspringRisk(male.id, female.id);
+
+            const markerRisks = offspringRisk.markerRisks || [];
+            const highRiskCount = markerRisks.filter((m: any) => m.offspringRiskLevel === 'high').length;
+            const mediumRiskCount = markerRisks.filter((m: any) => m.offspringRiskLevel === 'medium').length;
+            const lowRiskCount = markerRisks.filter((m: any) => m.offspringRiskLevel === 'low').length;
+            const carrierCount = markerRisks.filter((m: any) => m.offspringRiskLevel === 'carrier').length;
+            const unknownCount = markerRisks.filter((m: any) => m.offspringRiskLevel === 'unknown').length;
+
+            let geneticRiskLevel = 'low';
+            if (highRiskCount > 0) geneticRiskLevel = 'high';
+            else if (mediumRiskCount > 0) geneticRiskLevel = 'medium';
+            else if (carrierCount > 0) geneticRiskLevel = 'carrier';
+
+            const riskSummary = {
+              total: markerRisks.length,
+              highRisk: highRiskCount,
+              mediumRisk: mediumRiskCount,
+              lowRisk: lowRiskCount,
+              carrier: carrierCount,
+              unknown: unknownCount,
+            };
+
+            const overallRiskScore = offspringRisk.overallRisk || 0;
+
+            const inbreedingRiskLevel = getInbreedingRiskLevel(inbreedingCoeff);
+
+            const combinedScore = calculateCombinedRiskScore(
+              overallRiskScore,
+              inbreedingCoeff
+            );
+
+            const overallRiskLevel = determineOverallRiskLevel(
+              overallRiskScore,
+              geneticRiskLevel,
+              inbreedingRiskLevel
+            );
+
+            recommendations.push({
+              id: `${male.id}_${female.id}`,
+              male: {
+                id: male.id,
+                name: male.name,
+                breed: male.breed,
+                species: male.species,
+                avatarUrl: male.avatarUrl,
+              },
+              female: {
+                id: female.id,
+                name: female.name,
+                breed: female.breed,
+                species: female.species,
+                avatarUrl: female.avatarUrl,
+              },
+              species: sp,
+              inbreedingCoefficient: inbreedingCoeff,
+              inbreedingRiskLevel,
+              overallGeneticRiskScore: overallRiskScore,
+              overallGeneticRiskLevel: geneticRiskLevel,
+              combinedRiskScore: combinedScore,
+              overallRiskLevel,
+              riskSummary,
+              topRisks: offspringRisk.markerRisks
+                ?.filter((m: any) => m.offspringRiskLevel === 'high' || m.offspringRiskLevel === 'medium')
+                .slice(0, 3) || [],
+            });
+          } catch (e) {
+            console.error(`计算配对 ${male.name} × ${female.name} 失败:`, e);
+          }
+        }
+      }
+    }
+
+    recommendations.sort((a, b) => {
+      const riskOrder: Record<string, number> = {
+        low: 0,
+        carrier: 1,
+        medium: 2,
+        high: 3,
+        very_high: 4,
+        unknown: 5,
+      };
+
+      const levelDiff = riskOrder[a.overallRiskLevel] - riskOrder[b.overallRiskLevel];
+      if (levelDiff !== 0) return levelDiff;
+
+      const scoreDiff = a.combinedRiskScore - b.combinedRiskScore;
+      if (scoreDiff !== 0) return scoreDiff;
+
+      return a.inbreedingCoefficient - b.inbreedingCoefficient;
+    });
+
+    const limitedRecommendations = recommendations.slice(0, resultLimit);
+
+    res.json({
+      total: recommendations.length,
+      limit: resultLimit,
+      recommendations: limitedRecommendations,
+    });
+  } catch (error) {
+    console.error('获取繁殖推荐失败:', error);
+    res.status(500).json({ error: '获取繁殖推荐失败' });
+  }
+});
+
+function calculateCombinedRiskScore(geneticRiskScore: number, inbreedingCoeff: number): number {
+  const geneticWeight = 0.7;
+  const inbreedingWeight = 0.3;
+
+  const normalizedInbreeding = Math.min(inbreedingCoeff / 0.25, 1);
+
+  return geneticRiskScore * geneticWeight + normalizedInbreeding * inbreedingWeight;
+}
+
+function determineOverallRiskLevel(
+  geneticRiskScore: number,
+  geneticRiskLevel: string,
+  inbreedingRiskLevel: string
+): string {
+  const riskLevels = ['low', 'carrier', 'medium', 'high', 'very_high'];
+  const inbreedingIndex = riskLevels.indexOf(inbreedingRiskLevel);
+  const geneticIndex = riskLevels.indexOf(geneticRiskLevel);
+
+  const maxIndex = Math.max(inbreedingIndex, geneticIndex);
+  return riskLevels[maxIndex] || 'unknown';
+}
+
 export default router;

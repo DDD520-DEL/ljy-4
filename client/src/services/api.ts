@@ -183,6 +183,55 @@ export interface BreedingPair {
   female?: Pet;
 }
 
+export interface BreedingRecommendation {
+  id: string;
+  male: {
+    id: string;
+    name: string;
+    breed: string | null;
+    species: string;
+    avatarUrl: string | null;
+  };
+  female: {
+    id: string;
+    name: string;
+    breed: string | null;
+    species: string;
+    avatarUrl: string | null;
+  };
+  species: string;
+  inbreedingCoefficient: number;
+  inbreedingRiskLevel: string;
+  overallGeneticRiskScore: number;
+  overallGeneticRiskLevel: string;
+  combinedRiskScore: number;
+  overallRiskLevel: string;
+  riskSummary: {
+    total: number;
+    highRisk: number;
+    mediumRisk: number;
+    lowRisk: number;
+    carrier: number;
+    unknown: number;
+  };
+  topRisks: {
+    markerName: string;
+    disease: string;
+    inheritance: string;
+    parent1Genotype: string;
+    parent2Genotype: string;
+    offspringRisk: number;
+    offspringRiskLevel: string;
+    explanation: string;
+  }[];
+}
+
+export interface BreedingRecommendationsResponse {
+  total: number;
+  limit: number;
+  recommendations: BreedingRecommendation[];
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -237,6 +286,8 @@ export const breedingApi = {
   listPairs: () => api.get<any, BreedingPair[]>('/breeding/breeding-pairs'),
   createPair: (data: any) => api.post<any, BreedingPair>('/breeding/breeding-pairs', data),
   removePair: (id: string) => api.delete<any, { message: string }>(`/breeding/breeding-pairs/${id}`),
+  getRecommendations: (params?: { species?: string; maxInbreedingCoeff?: number; limit?: number }) =>
+    api.get<any, BreedingRecommendationsResponse>('/breeding/recommendations', { params }),
 };
 
 export default api;

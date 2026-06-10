@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Settings,
   Ruler,
@@ -9,6 +9,10 @@ import {
   Shield,
   ArrowRight,
   Heart,
+  Sparkles,
+  ArrowUpDown,
+  Check,
+  Info,
 } from 'lucide-react';
 import {
   breedingApi,
@@ -16,13 +20,20 @@ import {
   Pet,
   BreedingPair,
   PairInbreedingResult,
+  BreedingRecommendation,
 } from '../services/api';
 
 export default function BreedingManage() {
   const [breedingPets, setBreedingPets] = useState<Pet[]>([]);
   const [breedingPairs, setBreedingPairs] = useState<BreedingPair[]>([]);
+  const [recommendations, setRecommendations] = useState<BreedingRecommendation[]>([]);
+  const [recommendationsTotal, setRecommendationsTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'pets' | 'pairs' | 'calculator'>('pets');
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'pets' | 'pairs' | 'calculator' | 'recommendations'>('pets');
+  const [sortBy, setSortBy] = useState<'risk' | 'inbreeding' | 'genetic'>('risk');
+  const [recSpeciesFilter, setRecSpeciesFilter] = useState('all');
+  const [addingPairId, setAddingPairId] = useState<string | null>(null);
 
   const [maleId, setMaleId] = useState('');
   const [femaleId, setFemaleId] = useState('');
@@ -49,6 +60,48 @@ export default function BreedingManage() {
       console.error('加载数据失败:', error);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadRecommendations() {
+    setRecommendationsLoading(true);
+    try {
+      const result = await breedingApi.getRecommendations({
+        species: recSpeciesFilter === 'all' ? undefined : recSpeciesFilter,
+        limit: 30,
+      });
+      setRecommendations(result.recommendations || []);
+      setRecommendationsTotal(result.total || 0);
+    } catch (error) {
+      console.error('加载推荐失败:', error);
+    } finally {
+      setRecommendationsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'recommendations') {
+      loadRecommendations();
+    }
+  }, [activeTab, recSpeciesFilter]);
+
+  async function addRecommendationToPair(rec: BreedingRecommendation) {
+    setAddingPairId(rec.id);
+    try {
+      await breedingApi.createPair({
+        maleId: rec.male.id,
+        femaleId: rec.female.id,
+      });
+      loadData();
+      alert('已添加到配种对');
+    } catch (error: any) {
+      if (error?.error?.includes('已存在')) {
+        alert('该配种对已存在');
+      } else {
+        alert(`添加失败: ${error?.error || '未知错误'}`);
+      }
+    } finally {
+      setAddingPairId(null);
     }
   }
 
@@ -102,6 +155,8 @@ export default function BreedingManage() {
         return 'text-red-600 bg-red-50 border-red-200';
       case 'medium':
         return 'text-amber-600 bg-amber-50 border-amber-200';
+      case 'carrier':
+        return 'text-purple-600 bg-purple-50 border-purple-200';
       case 'low':
         return 'text-green-600 bg-green-50 border-green-200';
       default:
@@ -117,6 +172,8 @@ export default function BreedingManage() {
         return '高风险';
       case 'medium':
         return '中风险';
+      case 'carrier':
+        return '携带者';
       case 'low':
         return '低风险';
       default:
@@ -133,6 +190,43 @@ export default function BreedingManage() {
   const malePets = breedingPets.filter((p) => p.gender === 'male');
   const femalePets = breedingPets.filter((p) => p.gender === 'female');
 
+  const sortedRecommendations = useMemo(() => {
+    const list = [...recommendations];
+    const riskOrder: Record<string, number> = {
+      low: 0,
+      carrier: 1,
+      medium: 2,
+      high: 3,
+      very_high: 4,
+      unknown: 5,
+    };
+
+    switch (sortBy) {
+      case 'risk':
+        return list.sort((a, b) => {
+          const levelDiff = riskOrder[a.overallRiskLevel] - riskOrder[b.overallRiskLevel];
+          if (levelDiff !== 0) return levelDiff;
+          return a.combinedRiskScore - b.combinedRiskScore;
+        });
+      case 'inbreeding':
+        return list.sort((a, b) => a.inbreedingCoefficient - b.inbreedingCoefficient);
+      case 'genetic':
+        return list.sort((a, b) => {
+          const levelDiff = riskOrder[a.overallGeneticRiskLevel] - riskOrder[b.overallGeneticRiskLevel];
+          if (levelDiff !== 0) return levelDiff;
+          return a.overallGeneticRiskScore - b.overallGeneticRiskScore;
+        });
+      default:
+        return list;
+    }
+  }, [recommendations, sortBy]);
+
+  const isPairExists = (maleId: string, femaleId: string) => {
+    return breedingPairs.some(
+      (p) => p.maleId === maleId && p.femaleId === femaleId
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -147,6 +241,7 @@ export default function BreedingManage() {
           {[
             { key: 'pets', label: '种畜库', icon: PawPrint },
             { key: 'pairs', label: '配种对', icon: Heart },
+            { key: 'recommendations', label: '智能推荐', icon: Sparkles },
             { key: 'calculator', label: '近交系数计算', icon: Ruler },
           ].map((tab) => {
             const Icon = tab.icon;
@@ -328,6 +423,252 @@ export default function BreedingManage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'recommendations' && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-4 items-center justify-between">
+                <div className="flex flex-wrap gap-4 items-center">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">物种:</span>
+                    <select
+                      value={recSpeciesFilter}
+                      onChange={(e) => setRecSpeciesFilter(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                    >
+                      <option value="all">全部</option>
+                      <option value="dog">犬</option>
+                      <option value="cat">猫</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600">排序:</span>
+                    <select
+                      value={sortBy}
+                      onChange={(e) => setSortBy(e.target.value as any)}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                    >
+                      <option value="risk">综合风险</option>
+                      <option value="genetic">遗传风险</option>
+                      <option value="inbreeding">近交系数</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-500">
+                  共 <span className="font-medium text-gray-900">{recommendationsTotal}</span> 个推荐配对
+                  {sortedRecommendations.length < recommendationsTotal && (
+                    <span className="ml-1">（展示前 {sortedRecommendations.length} 个）</span>
+                  )}
+                </div>
+              </div>
+
+              {recommendationsLoading ? (
+                <div className="text-center py-16 text-gray-500">
+                  <div className="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full mx-auto mb-3"></div>
+                  <p>正在分析基因数据，生成推荐配对...</p>
+                </div>
+              ) : sortedRecommendations.length === 0 ? (
+                <div className="text-center py-16">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Sparkles className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900">暂无推荐配对</h3>
+                  <p className="text-gray-500 mt-1">
+                    系统未找到符合条件的低风险配对组合
+                  </p>
+                  <p className="text-xs text-gray-400 mt-2">
+                    提示：请确保种畜库中有足够的公母个体，且已上传基因检测报告
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {sortedRecommendations.map((rec, index) => {
+                    const exists = isPairExists(rec.male.id, rec.female.id);
+                    const isAdding = addingPairId === rec.id;
+
+                    return (
+                      <div
+                        key={rec.id}
+                        className={`border rounded-xl p-5 transition-all hover:shadow-md ${
+                          rec.overallRiskLevel === 'low'
+                            ? 'border-green-200 bg-green-50/30'
+                            : rec.overallRiskLevel === 'carrier'
+                            ? 'border-purple-200 bg-purple-50/30'
+                            : rec.overallRiskLevel === 'medium'
+                            ? 'border-amber-200 bg-amber-50/30'
+                            : rec.overallRiskLevel === 'high' || rec.overallRiskLevel === 'very_high'
+                            ? 'border-red-200 bg-red-50/30'
+                            : 'border-gray-200 bg-gray-50/30'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 bg-white rounded-full flex items-center justify-center text-xs font-semibold text-gray-500 shadow-sm">
+                              {index + 1}
+                            </span>
+                            <span
+                              className={`text-xs px-2.5 py-1 rounded-full font-medium ${getRiskColor(
+                                rec.overallRiskLevel
+                              )}`}
+                            >
+                              {getRiskLabel(rec.overallRiskLevel)}
+                            </span>
+                          </div>
+                          {exists ? (
+                            <span className="text-xs text-green-600 flex items-center gap-1 bg-green-100 px-2 py-1 rounded-full">
+                              <Check className="w-3 h-3" />
+                              已添加
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => addRecommendationToPair(rec)}
+                              disabled={isAdding}
+                              className="text-xs px-3 py-1.5 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                            >
+                              <Plus className="w-3 h-3" />
+                              {isAdding ? '添加中...' : '添加配种对'}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="flex-1 flex items-center gap-2 bg-white rounded-lg p-3 border border-gray-100">
+                            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-lg">
+                                {rec.male.species === 'dog' ? '🐕' : '🐱'}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-900 text-sm truncate">
+                                {rec.male.name}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {rec.male.breed || '未知品种'} · ♂
+                              </p>
+                            </div>
+                          </div>
+
+                          <Heart className="w-5 h-5 text-red-400 flex-shrink-0" />
+
+                          <div className="flex-1 flex items-center gap-2 bg-white rounded-lg p-3 border border-gray-100">
+                            <div className="w-10 h-10 bg-pink-50 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-lg">
+                                {rec.female.species === 'dog' ? '🐕' : '🐱'}
+                              </span>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-medium text-gray-900 text-sm truncate">
+                                {rec.female.name}
+                              </p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {rec.female.breed || '未知品种'} · ♀
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 mb-4">
+                          <div className="bg-white rounded-lg p-2.5 text-center border border-gray-100">
+                            <p className="text-xs text-gray-500 mb-0.5">综合风险</p>
+                            <p
+                              className={`text-sm font-bold ${
+                                rec.overallRiskLevel === 'low'
+                                  ? 'text-green-600'
+                                  : rec.overallRiskLevel === 'carrier'
+                                  ? 'text-purple-600'
+                                  : rec.overallRiskLevel === 'medium'
+                                  ? 'text-amber-600'
+                                  : rec.overallRiskLevel === 'high' || rec.overallRiskLevel === 'very_high'
+                                  ? 'text-red-600'
+                                  : 'text-gray-600'
+                              }`}
+                            >
+                              {getRiskLabel(rec.overallRiskLevel)}
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-lg p-2.5 text-center border border-gray-100">
+                            <p className="text-xs text-gray-500 mb-0.5">近交系数</p>
+                            <p className="text-sm font-bold text-gray-900">
+                              {(rec.inbreedingCoefficient * 100).toFixed(2)}%
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-lg p-2.5 text-center border border-gray-100">
+                            <p className="text-xs text-gray-500 mb-0.5">遗传评分</p>
+                            <p className="text-sm font-bold text-gray-900">
+                              {(rec.overallGeneticRiskScore * 100).toFixed(1)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-gray-500 mb-3">
+                          <Info className="w-3.5 h-3.5" />
+                          <span>风险位点分布</span>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1">
+                          <div className="text-center p-1.5 bg-gray-100 rounded">
+                            <p className="text-sm font-semibold text-gray-900">
+                              {rec.riskSummary.total || 0}
+                            </p>
+                            <p className="text-xs text-gray-500">总位</p>
+                          </div>
+                          <div className="text-center p-1.5 bg-red-100 rounded">
+                            <p className="text-sm font-semibold text-red-700">
+                              {rec.riskSummary.highRisk || 0}
+                            </p>
+                            <p className="text-xs text-red-600">高风</p>
+                          </div>
+                          <div className="text-center p-1.5 bg-amber-100 rounded">
+                            <p className="text-sm font-semibold text-amber-700">
+                              {rec.riskSummary.mediumRisk || 0}
+                            </p>
+                            <p className="text-xs text-amber-600">中风</p>
+                          </div>
+                          <div className="text-center p-1.5 bg-purple-100 rounded">
+                            <p className="text-sm font-semibold text-purple-700">
+                              {rec.riskSummary.carrier || 0}
+                            </p>
+                            <p className="text-xs text-purple-600">携带</p>
+                          </div>
+                          <div className="text-center p-1.5 bg-green-100 rounded">
+                            <p className="text-sm font-semibold text-green-700">
+                              {rec.riskSummary.lowRisk || 0}
+                            </p>
+                            <p className="text-xs text-green-600">低风</p>
+                          </div>
+                        </div>
+
+                        {rec.topRisks && rec.topRisks.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-gray-200">
+                            <p className="text-xs text-gray-500 mb-2">主要风险位点：</p>
+                            <div className="space-y-1.5">
+                              {rec.topRisks.slice(0, 2).map((risk, idx) => (
+                                <div
+                                  key={idx}
+                                  className="flex items-center justify-between text-xs bg-white rounded px-2.5 py-1.5 border border-gray-100"
+                                >
+                                  <span className="font-medium text-gray-700">
+                                    {risk.disease}
+                                  </span>
+                                  <span
+                                    className={
+                                      risk.offspringRiskLevel === 'high'
+                                        ? 'text-red-600'
+                                        : 'text-amber-600'
+                                    }
+                                  >
+                                    {(risk.offspringRisk * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
