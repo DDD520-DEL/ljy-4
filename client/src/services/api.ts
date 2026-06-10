@@ -277,6 +277,64 @@ export interface BreedingRecommendationsResponse {
   recommendations: BreedingRecommendation[];
 }
 
+export interface PuppyRecord {
+  id: string;
+  litterRecordId: string;
+  petId: string | null;
+  name: string | null;
+  gender: string;
+  birthWeight: number | null;
+  color: string | null;
+  status: string;
+  healthStatus: string;
+  healthNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  pet?: Pet | null;
+}
+
+export interface PuppyRecordInput {
+  name?: string;
+  gender: string;
+  birthWeight?: number;
+  color?: string;
+  status?: string;
+  healthStatus?: string;
+  healthNotes?: string;
+}
+
+export interface HealthComparison {
+  predictedRisks?: string[];
+  actualHealthIssues?: string[];
+  matchLevel?: string;
+  notes?: string;
+}
+
+export interface LitterRecord {
+  id: string;
+  breedingPairId: string;
+  birthDate: string;
+  totalCount: number;
+  aliveCount: number;
+  deadCount: number;
+  notes: string | null;
+  healthComparison: HealthComparison | null;
+  createdAt: string;
+  updatedAt: string;
+  breedingPair?: BreedingPair;
+  puppies?: PuppyRecord[];
+}
+
+export interface LitterRecordInput {
+  birthDate: string;
+  totalCount: number;
+  aliveCount?: number;
+  deadCount?: number;
+  notes?: string;
+  puppies?: PuppyRecordInput[];
+  healthComparison?: HealthComparison;
+}
+
 export interface SearchResultPet {
   id: string;
   name: string;
@@ -380,6 +438,18 @@ export const breedingApi = {
   removePair: (id: string) => api.delete<any, { message: string }>(`/breeding/breeding-pairs/${id}`),
   getRecommendations: (params?: { species?: string; maxInbreedingCoeff?: number; limit?: number }) =>
     api.get<any, BreedingRecommendationsResponse>('/breeding/recommendations', { params }),
+  listLitters: (pairId: string) =>
+    api.get<any, LitterRecord[]>(`/breeding/breeding-pairs/${pairId}/litters`),
+  getLitter: (id: string) =>
+    api.get<any, LitterRecord>(`/breeding/litters/${id}`),
+  createLitter: (pairId: string, data: LitterRecordInput) =>
+    api.post<any, LitterRecord>(`/breeding/breeding-pairs/${pairId}/litters`, data),
+  updateLitter: (id: string, data: Partial<LitterRecordInput>) =>
+    api.put<any, LitterRecord>(`/breeding/litters/${id}`, data),
+  removeLitter: (id: string) =>
+    api.delete<any, { message: string }>(`/breeding/litters/${id}`),
+  updatePuppy: (id: string, data: Partial<PuppyRecordInput>) =>
+    api.put<any, PuppyRecord>(`/breeding/puppies/${id}`, data),
 };
 
 export const searchApi = {

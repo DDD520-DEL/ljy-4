@@ -33,6 +33,7 @@ model Pet {
   breedingPairsAsFemale BreedingPair[] @relation("BreedingFemale")
   riskPredictions       RiskPrediction[]
   weightRecords         WeightRecord[]
+  puppyRecords          PuppyRecord[]
 }
 
 model ParentRelation {
@@ -124,6 +125,8 @@ model BreedingPair {
 
   male       Pet      @relation("BreedingMale", fields: [maleId], references: [id])
   female     Pet      @relation("BreedingFemale", fields: [femaleId], references: [id])
+
+  litterRecords LitterRecord[]
 }
 
 model WeightRecord {
@@ -135,4 +138,38 @@ model WeightRecord {
   createdAt   DateTime @default(now())
 
   pet         Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+
+model LitterRecord {
+  id              String   @id @default(uuid())
+  breedingPairId  String
+  birthDate       DateTime
+  totalCount      Int
+  aliveCount      Int
+  deadCount       Int
+  notes           String?
+  healthComparison String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  breedingPair    BreedingPair @relation(fields: [breedingPairId], references: [id], onDelete: Cascade)
+  puppies         PuppyRecord[]
+}
+
+model PuppyRecord {
+  id              String   @id @default(uuid())
+  litterRecordId  String
+  petId           String?
+  name            String?
+  gender          String
+  birthWeight     Float?
+  color           String?
+  status          String   @default("alive")
+  healthStatus    String   @default("normal")
+  healthNotes     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  litterRecord    LitterRecord @relation(fields: [litterRecordId], references: [id], onDelete: Cascade)
+  pet             Pet?         @relation(fields: [petId], references: [id], onDelete: SetNull)
 }

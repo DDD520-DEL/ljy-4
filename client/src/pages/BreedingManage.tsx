@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Settings,
   Ruler,
@@ -13,6 +14,7 @@ import {
   ArrowUpDown,
   Check,
   Info,
+  Eye,
 } from 'lucide-react';
 import {
   breedingApi,
@@ -414,6 +416,13 @@ export default function BreedingManage() {
                             </p>
                           </div>
                         )}
+                        <Link
+                          to={`/breeding/${pair.id}`}
+                          className="flex items-center gap-1 px-3 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors text-sm font-medium"
+                        >
+                          <Eye className="w-4 h-4" />
+                          详情
+                        </Link>
                         <button
                           onClick={() => removePair(pair.id)}
                           className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"

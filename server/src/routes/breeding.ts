@@ -468,4 +468,296 @@ function determineOverallRiskLevel(
   return riskLevels[maxIndex] || 'unknown';
 }
 
+router.post('/breeding-pairs/:id/litters', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { birthDate, totalCount, aliveCount, deadCount, notes, puppies, healthComparison } = req.body;
+
+    if (!birthDate || !totalCount || totalCount <= 0) {
+      return res.status(400).json({ error: '请提供有效的出生日期和产仔数量' });
+    }
+
+    const pair = await prisma.breedingPair.findUnique({
+      where: { id },
+      include: { male: true, female: true },
+    });
+
+    if (!pair) {
+      return res.status(404).json({ error: '配种对不存在' });
+    }
+
+    const finalAliveCount = aliveCount ?? totalCount;
+    const finalDeadCount = deadCount ?? (totalCount - finalAliveCount);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const litter = await tx.litterRecord.create({
+        data: {
+          breedingPairId: id,
+          birthDate: new Date(birthDate),
+          totalCount,
+          aliveCount: finalAliveCount,
+          deadCount: finalDeadCount,
+          notes,
+          healthComparison: healthComparison ? JSON.stringify(healthComparison) : null,
+        },
+      });
+
+      const createdPuppies = [];
+      const createdRelations = [];
+
+      if (puppies && Array.isArray(puppies) && puppies.length > 0) {
+        for (const puppy of puppies) {
+          const newPet = await tx.pet.create({
+            data: {
+              name: puppy.name || `幼崽${createdPuppies.length + 1}`,
+              species: pair.male.species,
+              breed: pair.male.breed,
+              gender: puppy.gender || 'unknown',
+              birthDate: new Date(birthDate),
+              color: puppy.color,
+              weight: puppy.birthWeight,
+              description: `父本: ${pair.male.name}, 母本: ${pair.female.name}`,
+              status: puppy.status === 'dead' ? 'deceased' : 'active',
+            },
+          });
+
+          const puppyRecord = await tx.puppyRecord.create({
+            data: {
+              litterRecordId: litter.id,
+              petId: newPet.id,
+              name: puppy.name,
+              gender: puppy.gender || 'unknown',
+              birthWeight: puppy.birthWeight,
+              color: puppy.color,
+              status: puppy.status || 'alive',
+              healthStatus: puppy.healthStatus || 'normal',
+              healthNotes: puppy.healthNotes,
+            },
+          });
+
+          createdPuppies.push({ ...puppyRecord, pet: newPet });
+
+          const fatherRel = await tx.parentRelation.create({
+            data: {
+              parentId: pair.maleId,
+              childId: newPet.id,
+              relationType: 'father',
+            },
+          });
+          createdRelations.push(fatherRel);
+
+          const motherRel = await tx.parentRelation.create({
+            data: {
+              parentId: pair.femaleId,
+              childId: newPet.id,
+              relationType: 'mother',
+            },
+          });
+          createdRelations.push(motherRel);
+        }
+      }
+
+      return { litter, puppies: createdPuppies, relations: createdRelations };
+    });
+
+    res.status(201).json({
+      ...result.litter,
+      puppies: result.puppies,
+      healthComparison: result.litter.healthComparison ? JSON.parse(result.litter.healthComparison) : null,
+    });
+  } catch (error) {
+    console.error('创建窝产记录失败:', error);
+    res.status(500).json({ error: '创建窝产记录失败' });
+  }
+});
+
+router.get('/breeding-pairs/:id/litters', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const pair = await prisma.breedingPair.findUnique({ where: { id } });
+    if (!pair) {
+      return res.status(404).json({ error: '配种对不存在' });
+    }
+
+    const litters = await prisma.litterRecord.findMany({
+      where: { breedingPairId: id },
+      orderBy: { birthDate: 'desc' },
+      include: {
+        puppies: {
+          include: {
+            pet: true,
+          },
+        },
+      },
+    });
+
+    const parsedLitters = litters.map((litter) => ({
+      ...litter,
+      healthComparison: litter.healthComparison ? JSON.parse(litter.healthComparison) : null,
+    }));
+
+    res.json(parsedLitters);
+  } catch (error) {
+    console.error('获取窝产记录列表失败:', error);
+    res.status(500).json({ error: '获取窝产记录列表失败' });
+  }
+});
+
+router.get('/litters/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const litter = await prisma.litterRecord.findUnique({
+      where: { id },
+      include: {
+        breedingPair: {
+          include: {
+            male: true,
+            female: true,
+          },
+        },
+        puppies: {
+          include: {
+            pet: true,
+          },
+        },
+      },
+    });
+
+    if (!litter) {
+      return res.status(404).json({ error: '窝产记录不存在' });
+    }
+
+    res.json({
+      ...litter,
+      healthComparison: litter.healthComparison ? JSON.parse(litter.healthComparison) : null,
+    });
+  } catch (error) {
+    console.error('获取窝产记录详情失败:', error);
+    res.status(500).json({ error: '获取窝产记录详情失败' });
+  }
+});
+
+router.put('/litters/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { birthDate, totalCount, aliveCount, deadCount, notes, healthComparison } = req.body;
+
+    const litter = await prisma.litterRecord.findUnique({ where: { id } });
+    if (!litter) {
+      return res.status(404).json({ error: '窝产记录不存在' });
+    }
+
+    const updateData: any = {};
+    if (birthDate) updateData.birthDate = new Date(birthDate);
+    if (totalCount !== undefined) updateData.totalCount = totalCount;
+    if (aliveCount !== undefined) updateData.aliveCount = aliveCount;
+    if (deadCount !== undefined) updateData.deadCount = deadCount;
+    if (notes !== undefined) updateData.notes = notes;
+    if (healthComparison !== undefined) {
+      updateData.healthComparison = typeof healthComparison === 'string'
+        ? healthComparison
+        : JSON.stringify(healthComparison);
+    }
+
+    const updated = await prisma.litterRecord.update({
+      where: { id },
+      data: updateData,
+      include: {
+        puppies: {
+          include: { pet: true },
+        },
+      },
+    });
+
+    res.json({
+      ...updated,
+      healthComparison: updated.healthComparison ? JSON.parse(updated.healthComparison) : null,
+    });
+  } catch (error) {
+    console.error('更新窝产记录失败:', error);
+    res.status(500).json({ error: '更新窝产记录失败' });
+  }
+});
+
+router.delete('/litters/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const litter = await prisma.litterRecord.findUnique({
+      where: { id },
+      include: { puppies: true },
+    });
+    if (!litter) {
+      return res.status(404).json({ error: '窝产记录不存在' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const puppy of litter.puppies) {
+        if (puppy.petId) {
+          await tx.parentRelation.deleteMany({
+            where: { childId: puppy.petId },
+          });
+          await tx.pet.delete({
+            where: { id: puppy.petId },
+          });
+        }
+      }
+      await tx.litterRecord.delete({ where: { id } });
+    });
+
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除窝产记录失败:', error);
+    res.status(500).json({ error: '删除窝产记录失败' });
+  }
+});
+
+router.put('/puppies/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, gender, birthWeight, color, status, healthStatus, healthNotes } = req.body;
+
+    const puppy = await prisma.puppyRecord.findUnique({ where: { id } });
+    if (!puppy) {
+      return res.status(404).json({ error: '仔宠记录不存在' });
+    }
+
+    const updateData: any = {};
+    if (name !== undefined) updateData.name = name;
+    if (gender !== undefined) updateData.gender = gender;
+    if (birthWeight !== undefined) updateData.birthWeight = birthWeight;
+    if (color !== undefined) updateData.color = color;
+    if (status !== undefined) updateData.status = status;
+    if (healthStatus !== undefined) updateData.healthStatus = healthStatus;
+    if (healthNotes !== undefined) updateData.healthNotes = healthNotes;
+
+    const updated = await prisma.puppyRecord.update({
+      where: { id },
+      data: updateData,
+      include: { pet: true },
+    });
+
+    if (updated.petId && (name || gender || birthWeight || color || status)) {
+      const petUpdateData: any = {};
+      if (name) petUpdateData.name = name;
+      if (gender) petUpdateData.gender = gender;
+      if (birthWeight) petUpdateData.weight = birthWeight;
+      if (color) petUpdateData.color = color;
+      if (status) petUpdateData.status = status === 'dead' ? 'deceased' : 'active';
+
+      await prisma.pet.update({
+        where: { id: updated.petId },
+        data: petUpdateData,
+      });
+    }
+
+    res.json(updated);
+  } catch (error) {
+    console.error('更新仔宠记录失败:', error);
+    res.status(500).json({ error: '更新仔宠记录失败' });
+  }
+});
+
 export default router;
