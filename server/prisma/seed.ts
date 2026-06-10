@@ -267,6 +267,43 @@ async function main() {
     });
   }
 
+  console.log('添加示例体重记录...');
+
+  const weightRecords = [
+    { petIndex: 0, weight: 22.5, daysAgo: 365, note: '成年初期' },
+    { petIndex: 0, weight: 23.2, daysAgo: 270, note: '' },
+    { petIndex: 0, weight: 24.0, daysAgo: 180, note: '饮食调整后' },
+    { petIndex: 0, weight: 23.8, daysAgo: 90, note: '' },
+    { petIndex: 0, weight: 24.5, daysAgo: 30, note: '最近体检' },
+    { petIndex: 1, weight: 18.0, daysAgo: 365, note: '' },
+    { petIndex: 1, weight: 18.5, daysAgo: 200, note: '' },
+    { petIndex: 1, weight: 19.2, daysAgo: 60, note: '' },
+    { petIndex: 4, weight: 32.0, daysAgo: 300, note: '' },
+    { petIndex: 4, weight: 33.5, daysAgo: 150, note: '' },
+    { petIndex: 4, weight: 34.0, daysAgo: 45, note: '' },
+    { petIndex: 5, weight: 28.0, daysAgo: 250, note: '' },
+    { petIndex: 5, weight: 28.8, daysAgo: 100, note: '' },
+  ];
+
+  for (const record of weightRecords) {
+    const recordedAt = new Date();
+    recordedAt.setDate(recordedAt.getDate() - record.daysAgo);
+    await prisma.weightRecord.create({
+      data: {
+        petId: pets[record.petIndex].id,
+        weight: record.weight,
+        recordedAt,
+        note: record.note || null,
+      },
+    });
+    if (record.daysAgo <= 30) {
+      await prisma.pet.update({
+        where: { id: pets[record.petIndex].id },
+        data: { weight: record.weight },
+      });
+    }
+  }
+
   console.log('种子数据完成！');
 }
 

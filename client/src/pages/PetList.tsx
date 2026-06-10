@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye } from 'lucide-react';
+import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock } from 'lucide-react';
 import { petApi, Pet } from '../services/api';
 
 export default function PetList() {
@@ -205,6 +205,13 @@ export default function PetList() {
               </div>
 
               <div className="border-t border-gray-100 px-5 py-3 bg-gray-50 flex justify-end gap-2">
+                <Link
+                  to={`/pets/${pet.id}/timeline`}
+                  className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                  title="健康时间轴"
+                >
+                  <Clock className="w-4 h-4" />
+                </Link>
                 <Link
                   to={`/pets/${pet.id}`}
                   className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"

@@ -243,6 +243,32 @@ router.post('/breeding-pairs', async (req, res) => {
   }
 });
 
+router.get('/breeding-pairs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const pair = await prisma.breedingPair.findUnique({
+      where: { id },
+      include: {
+        male: true,
+        female: true,
+      },
+    });
+
+    if (!pair) {
+      return res.status(404).json({ error: '配种对不存在' });
+    }
+
+    res.json({
+      ...pair,
+      riskAssessment: parseRiskAssessment(pair.riskAssessment),
+    });
+  } catch (error) {
+    console.error('获取配种对详情失败:', error);
+    res.status(500).json({ error: '获取配种对详情失败' });
+  }
+});
+
 router.delete('/breeding-pairs/:id', async (req, res) => {
   try {
     const { id } = req.params;

@@ -32,6 +32,7 @@ model Pet {
   breedingPairsAsMale   BreedingPair[] @relation("BreedingMale")
   breedingPairsAsFemale BreedingPair[] @relation("BreedingFemale")
   riskPredictions       RiskPrediction[]
+  weightRecords         WeightRecord[]
 }
 
 model ParentRelation {
@@ -123,4 +124,15 @@ model BreedingPair {
 
   male       Pet      @relation("BreedingMale", fields: [maleId], references: [id])
   female     Pet      @relation("BreedingFemale", fields: [femaleId], references: [id])
+}
+
+model WeightRecord {
+  id          String   @id @default(uuid())
+  petId       String
+  weight      Float
+  recordedAt  DateTime @default(now())
+  note        String?
+  createdAt   DateTime @default(now())
+
+  pet         Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
 }

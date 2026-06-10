@@ -226,6 +226,51 @@ export interface BreedingRecommendation {
   }[];
 }
 
+export interface WeightRecord {
+  id: string;
+  petId: string;
+  weight: number;
+  recordedAt: string;
+  note: string | null;
+  createdAt: string;
+}
+
+export type TimelineEventType = 'weight' | 'gene' | 'breeding';
+
+export interface TimelineEvent {
+  id: string;
+  type: TimelineEventType;
+  date: string;
+  title: string;
+  summary: string;
+  detail: any;
+  link: string;
+}
+
+export interface WeightTrendPoint {
+  date: string;
+  weight: number;
+}
+
+export interface TimelineStats {
+  totalWeightRecords: number;
+  totalGeneReports: number;
+  totalBreedingRecords: number;
+}
+
+export interface TimelineResponse {
+  pet: {
+    id: string;
+    name: string;
+    species: string;
+    breed: string | null;
+    gender: string;
+  };
+  weightTrend: WeightTrendPoint[];
+  stats: TimelineStats;
+  events: TimelineEvent[];
+}
+
 export interface BreedingRecommendationsResponse {
   total: number;
   limit: number;
@@ -240,6 +285,14 @@ export const petApi = {
   remove: (id: string) => api.delete<any, { message: string }>(`/pets/${id}`),
   pedigree: (id: string, generations = 5) =>
     api.get<any, PedigreeNode>(`/pets/${id}/pedigree`, { params: { generations } }),
+  timeline: (id: string) => api.get<any, TimelineResponse>(`/pets/${id}/timeline`),
+  listWeights: (id: string) => api.get<any, WeightRecord[]>(`/pets/${id}/weights`),
+  createWeight: (id: string, data: Partial<WeightRecord>) =>
+    api.post<any, WeightRecord>(`/pets/${id}/weights`, data),
+  updateWeight: (id: string, recordId: string, data: Partial<WeightRecord>) =>
+    api.put<any, WeightRecord>(`/pets/${id}/weights/${recordId}`, data),
+  removeWeight: (id: string, recordId: string) =>
+    api.delete<any, { message: string }>(`/pets/${id}/weights/${recordId}`),
 };
 
 export const relationApi = {
@@ -284,6 +337,7 @@ export const breedingApi = {
   getPairInbreeding: (maleId: string, femaleId: string) =>
     api.post<any, PairInbreedingResult>('/breeding/pair/inbreeding', { maleId, femaleId }),
   listPairs: () => api.get<any, BreedingPair[]>('/breeding/breeding-pairs'),
+  getPair: (id: string) => api.get<any, BreedingPair>(`/breeding/breeding-pairs/${id}`),
   createPair: (data: any) => api.post<any, BreedingPair>('/breeding/breeding-pairs', data),
   removePair: (id: string) => api.delete<any, { message: string }>(`/breeding/breeding-pairs/${id}`),
   getRecommendations: (params?: { species?: string; maxInbreedingCoeff?: number; limit?: number }) =>

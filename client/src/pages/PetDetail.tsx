@@ -11,6 +11,7 @@ import {
   Dna,
   Trash2,
   Plus,
+  Clock,
 } from 'lucide-react';
 import { petApi, geneReportApi, geneticsApi, Pet, RiskSummary } from '../services/api';
 
@@ -466,6 +467,13 @@ export default function PetDetail() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h3 className="font-semibold text-gray-900 mb-4">快速操作</h3>
             <div className="space-y-2">
+              <Link
+                to={`/pets/${pet.id}/timeline`}
+                className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-sm"
+              >
+                <Clock className="w-5 h-5 text-amber-600" />
+                <span>健康时间轴</span>
+              </Link>
               <Link
                 to={`/pedigree/${pet.id}`}
                 className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors text-sm"

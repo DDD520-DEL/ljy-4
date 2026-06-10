@@ -13,8 +13,11 @@ import PetDetail from './pages/PetDetail';
 import PetForm from './pages/PetForm';
 import PedigreeTree from './pages/PedigreeTree';
 import GeneReports from './pages/GeneReports';
+import GeneReportDetail from './pages/GeneReportDetail';
 import RiskPrediction from './pages/RiskPrediction';
 import BreedingManage from './pages/BreedingManage';
+import BreedingPairDetail from './pages/BreedingPairDetail';
+import PetTimeline from './pages/PetTimeline';
 
 const navItems = [
   { path: '/', label: '首页', icon: Home, exact: true },
@@ -85,11 +88,14 @@ function App() {
             <Route path="/pets/new" element={<PetForm />} />
             <Route path="/pets/:id" element={<PetDetail />} />
             <Route path="/pets/:id/edit" element={<PetForm />} />
+            <Route path="/pets/:id/timeline" element={<PetTimeline />} />
             <Route path="/pedigree" element={<PedigreeTree />} />
             <Route path="/pedigree/:petId" element={<PedigreeTree />} />
             <Route path="/gene-reports" element={<GeneReports />} />
+            <Route path="/gene-reports/:id" element={<GeneReportDetail />} />
             <Route path="/risk-prediction" element={<RiskPrediction />} />
             <Route path="/breeding" element={<BreedingManage />} />
+            <Route path="/breeding/:id" element={<BreedingPairDetail />} />
           </Routes>
         </div>
       </main>
