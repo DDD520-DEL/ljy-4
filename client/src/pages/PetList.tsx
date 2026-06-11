@@ -105,7 +105,6 @@ export default function PetList() {
       });
     } catch (error) {
       console.error('导出失败:', error);
-      alert('导出失败，请重试');
     } finally {
       setExporting(false);
     }

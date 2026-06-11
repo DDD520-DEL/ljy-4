@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 
 const api = axios.create({
   baseURL: '/api',
@@ -6,9 +6,28 @@ const api = axios.create({
 });
 
 api.interceptors.response.use(
-  (response) => response.data,
-  (error) => {
+  (response) => {
+    if (response.config.responseType === 'blob') {
+      return response;
+    }
+    return response.data;
+  },
+  async (error) => {
     console.error('API Error:', error);
+    if (error.config?.responseType === 'blob' && error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text();
+        let errorData = text;
+        try {
+          errorData = JSON.parse(text);
+        } catch {
+          // 不是 JSON 格式，保持原样
+        }
+        return Promise.reject(errorData);
+      } catch {
+        return Promise.reject(error.message);
+      }
+    }
     return Promise.reject(error.response?.data || error.message);
   }
 );
@@ -721,25 +740,16 @@ export const petApi = {
   removeDailyLog: (id: string, logId: string) =>
     api.delete<any, { message: string }>(`/pets/${id}/daily-logs/${logId}`),
   exportExcel: async (params?: Record<string, any>) => {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          queryParams.append(key, String(value));
-        }
-      });
-    }
-    const queryString = queryParams.toString();
-    const url = `/api/pets/export/excel${queryString ? `?${queryString}` : ''}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error('导出失败');
-    }
-    const blob = await response.blob();
+    const response = await api.get<any, AxiosResponse<Blob>>('/pets/export/excel', {
+      params,
+      responseType: 'blob',
+      timeout: 120000,
+    });
+    const blob = response.data;
     const downloadUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = downloadUrl;
-    const contentDisposition = response.headers.get('Content-Disposition');
+    const contentDisposition = response.headers['content-disposition'];
     let filename = `pets_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
     if (contentDisposition) {
       const matches = contentDisposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
@@ -780,7 +790,7 @@ export const geneReportApi = {
     api.post<any, GeneReport>(`/gene-reports/mock/${petId}`, appointmentId ? { appointmentId } : {}),
   remove: (id: string) => api.delete<any, { message: string }>(`/gene-reports/${id}`),
   batchExport: async (reportIds: string[]) => {
-    const response = await axios.post('/api/gene-reports/batch-export', { reportIds }, {
+    const response = await api.post<any, AxiosResponse<Blob>>('/gene-reports/batch-export', { reportIds }, {
       responseType: 'blob',
       timeout: 120000,
     });
