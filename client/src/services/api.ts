@@ -500,6 +500,37 @@ export const geneReportApi = {
   },
 };
 
+export interface CsvValidationError {
+  row: number;
+  field: string;
+  message: string;
+  value: any;
+}
+
+export interface CsvImportResult {
+  success: boolean;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  createdCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  errors: CsvValidationError[];
+  importedMarkers: {
+    id: string;
+    markerName: string;
+    geneName: string;
+    species: string;
+    action: 'created' | 'updated' | 'skipped';
+  }[];
+  constants?: {
+    VALID_INHERITANCE: string[];
+    VALID_RISK_LEVELS: string[];
+    VALID_SPECIES: string[];
+    CSV_COLUMNS: { key: string; header: string; required: boolean }[];
+  };
+}
+
 export const geneticsApi = {
   listMarkers: (species?: string) =>
     api.get<any, GeneticMarker[]>('/genetics/markers', { params: { species } }),
@@ -510,6 +541,60 @@ export const geneticsApi = {
     api.get<any, OffspringRisk>('/genetics/offspring/risk', {
       params: { parent1Id, parent2Id },
     }),
+  downloadCsvTemplate: async () => {
+    const response = await fetch('/api/genetics/markers/template/csv');
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `genetic_markers_template_${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  },
+  exportMarkersCsv: async (species?: string) => {
+    const params = species ? `?species=${encodeURIComponent(species)}` : '';
+    const response = await fetch(`/api/genetics/markers/export/csv${params}`);
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `genetic_markers_export_${Date.now()}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  },
+  validateMarkersCsv: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch('/api/genetics/markers/validate/csv', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok && response.status >= 400) {
+      throw data;
+    }
+    return data as CsvImportResult;
+  },
+  importMarkersCsv: async (file: File, updateExisting = false) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('updateExisting', String(updateExisting));
+    const response = await fetch('/api/genetics/markers/import/csv', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok && response.status >= 400 && response.status !== 206) {
+      throw data;
+    }
+    return data as CsvImportResult;
+  },
+  getImportConstants: () =>
+    api.get<any, CsvImportResult['constants']>('/genetics/markers/import/constants'),
 };
 
 export const breedingApi = {
