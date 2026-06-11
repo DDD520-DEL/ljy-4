@@ -322,3 +322,22 @@ model HealthReport {
   @@index([petId])
   @@index([examDate])
 }
+
+model GeneticDisease {
+  id              String   @id @default(uuid())
+  name            String
+  species         String   // dog, cat, etc.
+  inheritance     String   // autosomal_dominant, autosomal_recessive, x_linked, etc.
+  symptoms        String   // JSON array of typical symptoms
+  affectedBreeds  String   // JSON array of commonly affected breeds
+  references      String?  // JSON array of reference links
+  description     String?
+  riskLevel       String?  // high, medium, low
+  prevalence      String?  // 患病率信息
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([species])
+  @@index([inheritance])
+  @@unique([name, species])
+}

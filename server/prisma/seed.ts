@@ -686,6 +686,346 @@ async function main() {
     }
   }
 
+  console.log('创建遗传疾病数据...');
+
+  const geneticDiseasesData: Prisma.GeneticDiseaseCreateInput[] = [
+    {
+      name: '多药耐药性（MDR1缺陷）',
+      species: 'dog',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '对伊维菌素等药物敏感',
+        '震颤、癫痫发作',
+        '失明、共济失调',
+        '严重时可导致昏迷或死亡',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '边境牧羊犬',
+        '澳大利亚牧羊犬',
+        '喜乐蒂牧羊犬',
+        '柯利犬',
+        '惠比特犬',
+      ]),
+      references: JSON.stringify([
+        {
+          title: 'MDR1基因缺陷 - 美国兽医医学协会',
+          url: 'https://www.avma.org/resources-tools/animal-health-and-welfare/mdr1-gene-mutation',
+        },
+        {
+          title: '兽药使用与MDR1基因多态性研究',
+          url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3147305/',
+        },
+      ]),
+      description: 'MDR1基因缺失突变导致P-糖蛋白功能缺陷，影响血脑屏障对药物的外排作用，使患病犬对多种常规药物产生严重不良反应。',
+      riskLevel: 'high',
+      prevalence: '约30%-50%的边境牧羊犬携带此突变',
+    },
+    {
+      name: '进行性视网膜萎缩（prcd型）',
+      species: 'dog',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '夜间视力下降',
+        '瞳孔散大',
+        '进行性视力减退',
+        '最终完全失明',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '贵宾犬',
+        '可卡犬',
+        '拉布拉多',
+        '金毛寻回犬',
+        '边境牧羊犬',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '进行性视网膜萎缩 - 眼科兽医学院',
+          url: 'https://www.acvo.org/eye-diseases/progressive-retinal-atrophy/',
+        },
+      ]),
+      description: 'prcd基因缺陷导致视网膜感光细胞进行性退化，通常在3-5岁开始出现临床症状，最终导致完全失明。',
+      riskLevel: 'high',
+      prevalence: '在多个品种中广泛存在，患病率因品种而异',
+    },
+    {
+      name: '退行性脊髓病（DM）',
+      species: 'dog',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '后肢共济失调',
+        '后肢无力',
+        '进行性瘫痪',
+        '尿便失禁',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '德国牧羊犬',
+        '威尔士柯基犬',
+        '西伯利亚哈士奇',
+        '金毛寻回犬',
+        '伯恩山犬',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '犬退行性脊髓病 - 神经学研究',
+          url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4415358/',
+        },
+      ]),
+      description: 'SOD1基因突变导致脊髓白质退行性变，是一种迟发性神经退行性疾病，通常在8岁以后发病。',
+      riskLevel: 'medium',
+      prevalence: '约0.5-1%的犬只受影响',
+    },
+    {
+      name: '血管性血友病1型（vWD1）',
+      species: 'dog',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '黏膜出血',
+        '术后出血不止',
+        '鼻出血',
+        '牙龈出血',
+        '黑便',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '杜宾犬',
+        '德国牧羊犬',
+        '贵宾犬',
+        '雪纳瑞',
+        '苏格兰梗',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '犬血管性血友病 - 凝血障碍研究',
+          url: 'https://www.ahdiag.com/von-willebrands-disease-in-dogs/',
+        },
+      ]),
+      description: 'vWF基因缺陷导致血管性血友病因子缺乏或功能异常，影响血小板聚集和凝血功能。',
+      riskLevel: 'medium',
+      prevalence: '杜宾犬中患病率约15-30%',
+    },
+    {
+      name: '多囊肾病（PKD）',
+      species: 'cat',
+      inheritance: 'autosomal_dominant',
+      symptoms: JSON.stringify([
+        '肾脏增大',
+        '肾功能不全',
+        '多饮多尿',
+        '食欲下降',
+        '体重减轻',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '波斯猫',
+        '布偶猫',
+        '英国短毛猫',
+        '苏格兰折耳猫',
+        '喜马拉雅猫',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '猫多囊肾病 - 国际猫病协会',
+          url: 'https://www.fabcats.org/owners/kidney/pkd.html',
+        },
+        {
+          title: 'PKD1基因检测在猫育种中的应用',
+          url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3163044/',
+        },
+      ]),
+      description: 'PKD1基因突变导致肾脏形成多个充满液体的囊肿，随着年龄增长逐渐增大，最终导致肾功能衰竭。',
+      riskLevel: 'high',
+      prevalence: '波斯猫中患病率约30-40%',
+    },
+    {
+      name: '肥厚型心肌病（HCM）',
+      species: 'cat',
+      inheritance: 'autosomal_dominant',
+      symptoms: JSON.stringify([
+        '呼吸困难',
+        '活动耐量下降',
+        '突然死亡',
+        '后肢麻痹',
+        '心脏杂音',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '缅因猫',
+        '布偶猫',
+        '英国短毛猫',
+        '美国短毛猫',
+        '苏格兰折耳猫',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '猫肥厚型心肌病 - 美国兽医心脏病学院',
+          url: 'https://acvim.org/guidelines/feline-hypertrophic-cardiomyopathy/',
+        },
+      ]),
+      description: 'MYBPC3或MYH7基因突变导致心肌异常增厚，影响心脏舒张功能，可导致心力衰竭和猝死。',
+      riskLevel: 'high',
+      prevalence: '缅因猫中约15%携带突变基因',
+    },
+    {
+      name: '进行性视网膜萎缩（rdAc型）',
+      species: 'cat',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '夜间视力下降',
+        '眼球震颤',
+        '进行性视力减退',
+        '完全失明',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '阿比西尼亚猫',
+        '索马里猫',
+        '奥西猫',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '猫遗传性视网膜疾病',
+          url: 'https://www.ebl.org.uk/articles/feline-hereditary-retinal-diseases/',
+        },
+      ]),
+      description: 'CEP290基因突变导致视网膜感光细胞发育异常和进行性退化，通常在幼年期即出现症状。',
+      riskLevel: 'high',
+      prevalence: '阿比西尼亚猫中约30%为携带者',
+    },
+    {
+      name: '糖原贮积症Ⅳ型',
+      species: 'cat',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '肌肉无力',
+        '运动障碍',
+        '心脏扩大',
+        '肝功能异常',
+        '幼年死亡',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '挪威森林猫',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '猫糖原贮积症Ⅳ型 - 遗传学研究',
+          url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2265643/',
+        },
+      ]),
+      description: 'PYGB基因突变导致糖原分支酶缺乏，使异常糖原在肌肉、心脏和肝脏中累积，造成严重的多系统损害。',
+      riskLevel: 'high',
+      prevalence: '挪威森林猫中约10-15%为携带者',
+    },
+    {
+      name: 'GM1神经节苷脂贮积症',
+      species: 'cat',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '共济失调',
+        '震颤',
+        '视力障碍',
+        '行为改变',
+        '进行性神经衰退',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '缅甸猫',
+        '科拉特猫',
+        '暹罗猫',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '猫溶酶体贮积病',
+          url: 'https://www.vet.cornell.edu/departments-centers-and-institutes/cornell-feline-health-center/health-information/feline-health-topics/lysosomal-storage-diseases',
+        },
+      ]),
+      description: 'GLB1基因突变导致β-半乳糖苷酶缺乏，使GM1神经节苷脂在中枢神经系统累积，造成严重的神经退行性病变。',
+      riskLevel: 'high',
+      prevalence: '在特定品种中有散发病例',
+    },
+    {
+      name: 'X连锁遗传性肾病（Alport综合征）',
+      species: 'dog',
+      inheritance: 'x_linked',
+      symptoms: JSON.stringify([
+        '蛋白尿',
+        '肾功能进行性减退',
+        '尿毒症',
+        '失聪（部分病例）',
+        '眼部异常',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '萨摩耶犬',
+        '斗牛犬',
+        '可卡犬',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '犬遗传性肾病',
+          url: 'https://www.vin.com/apputil/content/defaultadv1.aspx?pId=11259&id=3843869',
+        },
+      ]),
+      description: 'COL4A5基因突变导致肾小球基底膜结构异常，肾功能进行性减退，雄性犬症状通常更严重。',
+      riskLevel: 'high',
+      prevalence: '萨摩耶犬中已有多个家系报道',
+    },
+    {
+      name: '高尿酸尿症（HUU）',
+      species: 'dog',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '尿结石',
+        '尿血',
+        '尿频',
+        '尿道梗阻',
+        '痛风样病变',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '大麦町犬',
+        '英国斗牛犬',
+        '法国斗牛犬',
+        '迷你雪纳瑞',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '犬高尿酸尿症遗传学',
+          url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2930343/',
+        },
+      ]),
+      description: 'HAO1基因突变导致尿酸酶缺乏，使尿酸不能分解为尿囊素，导致尿酸结晶和结石形成。',
+      riskLevel: 'medium',
+      prevalence: '大麦町犬几乎100%受影响',
+    },
+    {
+      name: '脊髓性肌肉萎缩（SMA）',
+      species: 'cat',
+      inheritance: 'autosomal_recessive',
+      symptoms: JSON.stringify([
+        '后肢肌肉萎缩',
+        '步态异常',
+        '跳跃能力下降',
+        '骨骼肌无力',
+        '震颤',
+      ]),
+      affectedBreeds: JSON.stringify([
+        '缅因猫',
+      ]),
+      references: JSON.stringify([
+        {
+          title: '缅因猫脊髓性肌肉萎缩',
+          url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3024143/',
+        },
+      ]),
+      description: 'LIX1基因突变导致脊髓前角运动神经元退行性变，引起进行性肌肉萎缩和无力。',
+      riskLevel: 'high',
+      prevalence: '缅因猫中约10-15%为携带者',
+    },
+  ];
+
+  console.log('创建遗传疾病数据...');
+  for (const diseaseData of geneticDiseasesData) {
+    const existing = await prisma.geneticDisease.findFirst({
+      where: { name: diseaseData.name, species: diseaseData.species },
+    });
+    if (!existing) {
+      await prisma.geneticDisease.create({ data: diseaseData });
+    }
+  }
+
   console.log('种子数据完成！');
 }
 

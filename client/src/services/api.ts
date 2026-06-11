@@ -953,4 +953,44 @@ export const healthReportApi = {
     api.delete<any, { message: string }>(`/health-reports/${id}`),
 };
 
+export interface GeneticDiseaseReference {
+  title: string;
+  url: string;
+}
+
+export interface GeneticDisease {
+  id: string;
+  name: string;
+  species: string;
+  inheritance: string;
+  symptoms: string[];
+  affectedBreeds: string[];
+  references: GeneticDiseaseReference[] | null;
+  description: string | null;
+  riskLevel: string | null;
+  prevalence: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GeneticDiseaseFilterOptions {
+  species: string[];
+  inheritance: string[];
+}
+
+export const geneticDiseaseApi = {
+  list: (params?: { species?: string; inheritance?: string; search?: string }) =>
+    api.get<any, GeneticDisease[]>('/genetic-diseases', { params }),
+  getFilterOptions: () =>
+    api.get<any, GeneticDiseaseFilterOptions>('/genetic-diseases/filter-options'),
+  get: (id: string) =>
+    api.get<any, GeneticDisease>(`/genetic-diseases/${id}`),
+  create: (data: Partial<GeneticDisease>) =>
+    api.post<any, GeneticDisease>('/genetic-diseases', data),
+  update: (id: string, data: Partial<GeneticDisease>) =>
+    api.put<any, GeneticDisease>(`/genetic-diseases/${id}`, data),
+  remove: (id: string) =>
+    api.delete<any, { message: string }>(`/genetic-diseases/${id}`),
+};
+
 export default api;

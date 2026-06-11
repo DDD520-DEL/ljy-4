@@ -15,6 +15,7 @@ import geneTestAppointmentsRouter from './routes/geneTestAppointments.js';
 import breedsRouter from './routes/breeds.js';
 import remindersRouter from './routes/reminders.js';
 import healthReportsRouter from './routes/healthReports.js';
+import geneticDiseasesRouter from './routes/geneticDiseases.js';
 import { runFullAlertScan } from './utils/breedingAlerts.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -45,6 +46,7 @@ app.use('/api/gene-test-appointments', geneTestAppointmentsRouter);
 app.use('/api/breeds', breedsRouter);
 app.use('/api/reminders', remindersRouter);
 app.use('/api/health-reports', healthReportsRouter);
+app.use('/api/genetic-diseases', geneticDiseasesRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: '接口不存在' });
