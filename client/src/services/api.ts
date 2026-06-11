@@ -604,6 +604,20 @@ export interface Reminder {
   pet?: ReminderPetInfo;
 }
 
+export interface HealthReport {
+  id: string;
+  petId: string;
+  reportType: string;
+  fileName: string;
+  fileUrl: string | null;
+  examDate: string;
+  hospitalName: string;
+  conclusion: string | null;
+  createdAt: string;
+  updatedAt: string;
+  pet?: Pet;
+}
+
 export interface TodayRemindersResponse {
   today: Reminder[];
   upcoming: Reminder[];
@@ -914,6 +928,29 @@ export const reminderApi = {
     api.put<any, Reminder>(`/reminders/${id}/complete`),
   remove: (id: string) =>
     api.delete<any, { message: string }>(`/reminders/${id}`),
+};
+
+export const healthReportApi = {
+  listByPet: (petId: string) =>
+    api.get<any, HealthReport[]>(`/health-reports/pet/${petId}`),
+  get: (id: string) =>
+    api.get<any, HealthReport>(`/health-reports/${id}`),
+  upload: (petId: string, file: File, data: { examDate: string; hospitalName: string; conclusion?: string | null }) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('examDate', data.examDate);
+    formData.append('hospitalName', data.hospitalName);
+    if (data.conclusion) {
+      formData.append('conclusion', data.conclusion);
+    }
+    return api.post<any, HealthReport>(`/health-reports/upload/${petId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  update: (id: string, data: Partial<{ examDate: string; hospitalName: string; conclusion: string | null }>) =>
+    api.put<any, HealthReport>(`/health-reports/${id}`, data),
+  remove: (id: string) =>
+    api.delete<any, { message: string }>(`/health-reports/${id}`),
 };
 
 export default api;

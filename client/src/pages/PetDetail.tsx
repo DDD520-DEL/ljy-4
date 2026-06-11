@@ -35,6 +35,12 @@ import {
   ChevronRight,
   Bell,
   Edit3,
+  Stethoscope,
+  Download,
+  Eye,
+  Upload,
+  File,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   LineChart,
@@ -47,7 +53,7 @@ import {
   ResponsiveContainer,
   ReferenceArea,
 } from 'recharts';
-import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord, WeightRecord, BreedWeightStandard, PetDailyLog, PetDailyLogMood, PetDailyLogListResponse, reminderApi, Reminder } from '../services/api';
+import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, healthReportApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord, WeightRecord, BreedWeightStandard, PetDailyLog, PetDailyLogMood, PetDailyLogListResponse, reminderApi, Reminder, HealthReport } from '../services/api';
 
 export default function PetDetail() {
   const { id } = useParams<{ id: string }>();
@@ -55,7 +61,7 @@ export default function PetDetail() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines' | 'weight' | 'dailyLogs' | 'reminders'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines' | 'weight' | 'dailyLogs' | 'reminders' | 'healthReports'>('info');
   const [weights, setWeights] = useState<WeightRecord[]>([]);
   const [weightsLoading, setWeightsLoading] = useState(false);
   const [showWeightForm, setShowWeightForm] = useState(false);
@@ -128,6 +134,19 @@ export default function PetDetail() {
   });
   const [reminderActionIds, setReminderActionIds] = useState<Set<string>>(new Set());
 
+  const [healthReports, setHealthReports] = useState<HealthReport[]>([]);
+  const [healthReportsLoading, setHealthReportsLoading] = useState(false);
+  const [showHealthReportForm, setShowHealthReportForm] = useState(false);
+  const [editingHealthReport, setEditingHealthReport] = useState<HealthReport | null>(null);
+  const [healthReportForm, setHealthReportForm] = useState({
+    examDate: new Date().toISOString().split('T')[0],
+    hospitalName: '',
+    conclusion: '',
+    file: null as File | null,
+  });
+  const [previewReport, setPreviewReport] = useState<HealthReport | null>(null);
+  const [healthReportSubmitting, setHealthReportSubmitting] = useState(false);
+
   const DEFAULT_TEST_ITEMS = [
     '常规遗传病筛查',
     '品种特异性检测',
@@ -180,6 +199,25 @@ export default function PetDetail() {
       loadReminders();
     }
   }, [id, activeTab]);
+
+  useEffect(() => {
+    if (id && activeTab === 'healthReports') {
+      loadHealthReports();
+    }
+  }, [id, activeTab]);
+
+  async function loadHealthReports() {
+    if (!id) return;
+    setHealthReportsLoading(true);
+    try {
+      const data = await healthReportApi.listByPet(id);
+      setHealthReports(data);
+    } catch (error) {
+      console.error('加载体检报告失败:', error);
+    } finally {
+      setHealthReportsLoading(false);
+    }
+  }
 
   async function loadReminders() {
     if (!id) return;
@@ -301,6 +339,97 @@ export default function PetDetail() {
         return next;
       });
     }
+  }
+
+  function resetHealthReportForm() {
+    setHealthReportForm({
+      examDate: new Date().toISOString().split('T')[0],
+      hospitalName: '',
+      conclusion: '',
+      file: null,
+    });
+    setEditingHealthReport(null);
+    setShowHealthReportForm(false);
+  }
+
+  function handleEditHealthReport(report: HealthReport) {
+    setEditingHealthReport(report);
+    setHealthReportForm({
+      examDate: report.examDate.split('T')[0],
+      hospitalName: report.hospitalName,
+      conclusion: report.conclusion || '',
+      file: null,
+    });
+    setShowHealthReportForm(true);
+  }
+
+  async function handleSubmitHealthReport(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+
+    if (!healthReportForm.hospitalName.trim()) {
+      alert('请输入医院名称');
+      return;
+    }
+
+    if (!editingHealthReport && !healthReportForm.file) {
+      alert('请选择要上传的体检报告文件');
+      return;
+    }
+
+    setHealthReportSubmitting(true);
+    try {
+      if (editingHealthReport) {
+        await healthReportApi.update(editingHealthReport.id, {
+          examDate: healthReportForm.examDate,
+          hospitalName: healthReportForm.hospitalName.trim(),
+          conclusion: healthReportForm.conclusion.trim() || null,
+        });
+      } else if (healthReportForm.file) {
+        await healthReportApi.upload(id, healthReportForm.file, {
+          examDate: healthReportForm.examDate,
+          hospitalName: healthReportForm.hospitalName.trim(),
+          conclusion: healthReportForm.conclusion.trim() || null,
+        });
+      }
+
+      resetHealthReportForm();
+      loadHealthReports();
+    } catch (error: any) {
+      console.error('保存体检报告失败:', error);
+      alert(error?.error || '保存失败，请重试');
+    } finally {
+      setHealthReportSubmitting(false);
+    }
+  }
+
+  async function handleDeleteHealthReport(reportId: string) {
+    if (!confirm('确定要删除这份体检报告吗？')) return;
+
+    try {
+      await healthReportApi.remove(reportId);
+      loadHealthReports();
+    } catch (error) {
+      console.error('删除体检报告失败:', error);
+      alert('删除失败，请重试');
+    }
+  }
+
+  function handlePreviewReport(report: HealthReport) {
+    setPreviewReport(report);
+  }
+
+  function handleDownloadReport(report: HealthReport) {
+    if (!report.fileUrl) {
+      alert('文件不存在');
+      return;
+    }
+    const link = document.createElement('a');
+    link.href = report.fileUrl;
+    link.download = report.fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   async function loadWeights() {
@@ -916,6 +1045,7 @@ export default function PetDetail() {
                 { key: 'transfers', label: '流转记录', icon: Repeat },
                 { key: 'vaccines', label: '疫苗接种', icon: Syringe },
                 { key: 'reminders', label: '提醒事项', icon: Bell },
+                { key: 'healthReports', label: '体检报告', icon: Stethoscope },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
@@ -2438,6 +2568,250 @@ export default function PetDetail() {
                 </div>
               )}
 
+              {activeTab === 'healthReports' && (
+                <div>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">体检报告归档</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        共 {healthReports.length} 份体检报告
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        resetHealthReportForm();
+                        setShowHealthReportForm(true);
+                      }}
+                      className="flex items-center gap-1 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                      上传报告
+                    </button>
+                  </div>
+
+                  {showHealthReportForm && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-medium text-gray-900">
+                          {editingHealthReport ? '编辑体检报告' : '上传体检报告'}
+                        </h4>
+                        <button
+                          onClick={resetHealthReportForm}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSubmitHealthReport} className="space-y-4">
+                        {!editingHealthReport && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                              报告文件 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-primary-400 transition-colors cursor-pointer bg-white">
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,application/pdf,image/*"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) {
+                                    setHealthReportForm({ ...healthReportForm, file });
+                                  }
+                                }}
+                                className="hidden"
+                                id="healthReportFile"
+                              />
+                              <label htmlFor="healthReportFile" className="cursor-pointer">
+                                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                                {healthReportForm.file ? (
+                                  <div>
+                                    <p className="text-sm font-medium text-gray-900">
+                                      {healthReportForm.file.name}
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {(healthReportForm.file.size / 1024 / 1024).toFixed(2)} MB
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <p className="text-sm text-gray-600">
+                                      点击选择文件或拖拽到此处
+                                    </p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      支持 PDF、JPG、PNG 等格式，最大 20MB
+                                    </p>
+                                  </div>
+                                )}
+                              </label>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              体检日期 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="date"
+                                required
+                                value={healthReportForm.examDate}
+                                onChange={(e) => setHealthReportForm({ ...healthReportForm, examDate: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              医院名称 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="text"
+                                required
+                                value={healthReportForm.hospitalName}
+                                onChange={(e) => setHealthReportForm({ ...healthReportForm, hospitalName: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                placeholder="如：XX宠物医院"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            检查结论摘要
+                          </label>
+                          <textarea
+                            rows={3}
+                            value={healthReportForm.conclusion}
+                            onChange={(e) => setHealthReportForm({ ...healthReportForm, conclusion: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                            placeholder="简要记录体检结论、健康状况、医嘱建议等..."
+                          />
+                        </div>
+
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={resetHealthReportForm}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                          >
+                            取消
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={healthReportSubmitting}
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
+                          >
+                            {healthReportSubmitting ? '保存中...' : (editingHealthReport ? '保存修改' : '上传报告')}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {healthReportsLoading ? (
+                    <div className="text-center py-12 text-gray-500">加载中...</div>
+                  ) : healthReports.length === 0 ? (
+                    <div className="text-center py-12">
+                      <Stethoscope className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">暂无体检报告</p>
+                      <p className="text-sm text-gray-400 mt-1">点击上方按钮上传第一份体检报告</p>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <div className="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                      <div className="space-y-6">
+                        {healthReports.map((report, index) => (
+                          <div key={report.id} className="relative pl-16">
+                            <div className="absolute left-4 w-5 h-5 rounded-full bg-green-500 text-white flex items-center justify-center transform -translate-x-1/2 z-10">
+                              <Stethoscope className="w-3 h-3" />
+                            </div>
+                            {index < healthReports.length - 1 && (
+                              <div className="absolute left-4 top-5 bottom-0 w-0.5 bg-gray-200 transform -translate-x-1/2"></div>
+                            )}
+
+                            <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                                      {report.reportType === 'pdf' ? (
+                                        <><File className="w-3 h-3" /> PDF</>
+                                      ) : (
+                                        <><ImageIcon className="w-3 h-3" /> 图片</>
+                                      )}
+                                    </span>
+                                    <span className="text-sm font-medium text-gray-900">
+                                      {report.hospitalName}
+                                    </span>
+                                  </div>
+                                  <div className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                                    <Calendar className="w-3 h-3" />
+                                    {new Date(report.examDate).toLocaleDateString('zh-CN', {
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric',
+                                    })}
+                                  </div>
+                                  {report.conclusion && (
+                                    <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                                      {report.conclusion}
+                                    </p>
+                                  )}
+                                  <div className="text-xs text-gray-400">
+                                    文件名：{report.fileName}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {report.fileUrl && (
+                                    <>
+                                      <button
+                                        onClick={() => handlePreviewReport(report)}
+                                        className="p-2 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                        title="预览"
+                                      >
+                                        <Eye className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDownloadReport(report)}
+                                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                        title="下载"
+                                      >
+                                        <Download className="w-4 h-4" />
+                                      </button>
+                                    </>
+                                  )}
+                                  <button
+                                    onClick={() => handleEditHealthReport(report)}
+                                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                    title="编辑"
+                                  >
+                                    <Edit3 className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteHealthReport(report.id)}
+                                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="删除"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {activeTab === 'weight' && (
                 <div className="space-y-6">
                   {weightStandard && (
@@ -2858,6 +3232,79 @@ export default function PetDetail() {
           )}
         </div>
       </div>
+
+      {previewReport && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div>
+                <h3 className="font-semibold text-gray-900">{previewReport.hospitalName} - 体检报告</h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  体检日期：{new Date(previewReport.examDate).toLocaleDateString('zh-CN')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadReport(previewReport)}
+                  className="p-2 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                  title="下载"
+                >
+                  <Download className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setPreviewReport(null)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-gray-100 p-4">
+              {previewReport.reportType === 'pdf' ? (
+                <div className="bg-white rounded-lg p-8 h-full flex flex-col items-center justify-center">
+                  <File className="w-16 h-16 text-red-500 mb-4" />
+                  <p className="text-gray-700 font-medium mb-2">{previewReport.fileName}</p>
+                  <p className="text-sm text-gray-500 mb-4">PDF 文件预览</p>
+                  {previewReport.fileUrl && (
+                    <iframe
+                      src={previewReport.fileUrl}
+                      className="w-full h-96 border border-gray-200 rounded-lg"
+                      title={previewReport.fileName}
+                    />
+                  )}
+                  {previewReport.conclusion && (
+                    <div className="mt-6 p-4 bg-blue-50 rounded-lg w-full">
+                      <p className="text-sm font-medium text-blue-900 mb-1">检查结论摘要</p>
+                      <p className="text-sm text-blue-800">{previewReport.conclusion}</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  {previewReport.fileUrl ? (
+                    <img
+                      src={previewReport.fileUrl}
+                      alt={previewReport.fileName}
+                      className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                    />
+                  ) : (
+                    <div className="text-center text-gray-500">
+                      <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                      <p>图片加载失败</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {previewReport.conclusion && previewReport.reportType === 'image' && (
+              <div className="p-4 border-t border-gray-200 bg-gray-50">
+                <p className="text-xs font-medium text-gray-500 mb-1">检查结论摘要</p>
+                <p className="text-sm text-gray-700">{previewReport.conclusion}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

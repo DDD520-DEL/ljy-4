@@ -40,6 +40,7 @@ model Pet {
   vaccineRecords        VaccineRecord[]
   dailyLogs             PetDailyLog[]
   reminders             Reminder[]
+  healthReports         HealthReport[]
 }
 
 model ParentRelation {
@@ -302,4 +303,22 @@ model Reminder {
   @@index([petId])
   @@index([remindAt])
   @@index([isCompleted])
+}
+
+model HealthReport {
+  id            String   @id @default(uuid())
+  petId         String
+  reportType    String   // pdf, image
+  fileName      String
+  fileUrl       String?
+  examDate      DateTime
+  hospitalName  String
+  conclusion    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  pet           Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([petId])
+  @@index([examDate])
 }
