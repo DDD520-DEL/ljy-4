@@ -720,6 +720,39 @@ export const petApi = {
     api.put<any, PetDailyLog>(`/pets/${id}/daily-logs/${logId}`, data),
   removeDailyLog: (id: string, logId: string) =>
     api.delete<any, { message: string }>(`/pets/${id}/daily-logs/${logId}`),
+  exportExcel: async (params?: Record<string, any>) => {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          queryParams.append(key, String(value));
+        }
+      });
+    }
+    const queryString = queryParams.toString();
+    const url = `/api/pets/export/excel${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error('导出失败');
+    }
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    const contentDisposition = response.headers.get('Content-Disposition');
+    let filename = `pets_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    if (contentDisposition) {
+      const matches = contentDisposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+      if (matches && matches[1]) {
+        filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+      }
+    }
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(downloadUrl);
+  },
 };
 
 export const relationApi = {

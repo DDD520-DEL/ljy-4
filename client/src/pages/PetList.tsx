@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock, GitCompareArrows, X } from 'lucide-react';
+import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock, GitCompareArrows, X, Download } from 'lucide-react';
 import { petApi, Pet, alertApi, BreedingAlert, PetCompareData } from '../services/api';
 import { PetAlertSummary } from '../components/AlertBadge';
 import PetComparePanel from '../components/PetComparePanel';
@@ -14,6 +14,7 @@ export default function PetList() {
   const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
   const [compareData, setCompareData] = useState<{ pet1: PetCompareData; pet2: PetCompareData } | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const [filters, setFilters] = useState({
     species: searchParams.get('species') || 'all',
@@ -94,6 +95,22 @@ export default function PetList() {
     setCompareData(null);
   }
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await petApi.exportExcel({
+        species: filters.species,
+        gender: filters.gender,
+        search: filters.search || undefined,
+      });
+    } catch (error) {
+      console.error('导出失败:', error);
+      alert('导出失败，请重试');
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const speciesOptions = [
     { value: 'all', label: '全部物种' },
     { value: 'dog', label: '犬' },
@@ -156,6 +173,14 @@ export default function PetList() {
               {compareLoading ? '加载中...' : '对比'}
             </button>
           )}
+          <button
+            onClick={handleExport}
+            disabled={exporting || pets.length === 0}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-5 h-5" />
+            {exporting ? '导出中...' : '导出'}
+          </button>
           <Link
             to="/pets/new"
             className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"

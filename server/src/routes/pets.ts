@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import ExcelJS from 'exceljs';
 import prisma from '../lib/prisma.js';
 import { calculateInbreedingCoefficient } from '../utils/inbreeding.js';
 
@@ -177,6 +178,182 @@ router.get('/compare', async (req, res) => {
   } catch (error) {
     console.error('宠物对比失败:', error);
     res.status(500).json({ error: '宠物对比失败' });
+  }
+});
+
+router.get('/export/excel', async (req, res) => {
+  try {
+    const { species, breed, gender, isBreeding, search } = req.query;
+
+    const where: any = {};
+
+    if (species && species !== 'all') {
+      where.species = species as string;
+    }
+    if (breed && breed !== 'all') {
+      where.breed = breed as string;
+    }
+    if (gender && gender !== 'all') {
+      where.gender = gender as string;
+    }
+    if (isBreeding === 'true') {
+      where.isBreeding = true;
+    }
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string } },
+        { breed: { contains: search as string } },
+      ];
+    }
+
+    const pets = await prisma.pet.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        geneMarkers: {
+          include: {
+            marker: true,
+          },
+        },
+      },
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = '宠物基因谱系管理系统';
+    workbook.created = new Date();
+
+    const worksheet = workbook.addWorksheet('宠物列表');
+
+    worksheet.columns = [
+      { header: '宠物名称', key: 'name', width: 20 },
+      { header: '物种', key: 'species', width: 10 },
+      { header: '品种', key: 'breed', width: 20 },
+      { header: '性别', key: 'gender', width: 10 },
+      { header: '出生日期', key: 'birthDate', width: 15 },
+      { header: '基因标记检测总数', key: 'markerTotal', width: 18 },
+      { header: '高风险位点数', key: 'highRiskCount', width: 15 },
+      { header: '中风险位点数', key: 'mediumRiskCount', width: 15 },
+      { header: '携带位点数', key: 'carrierCount', width: 15 },
+      { header: '低风险/正常位点数', key: 'lowRiskCount', width: 18 },
+      { header: '基因标记检测概况', key: 'markerSummary', width: 50 },
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, size: 12 };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE5E7EB' },
+    };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const getGenderLabel = (gender: string) => {
+      if (gender === 'male') return '雄性';
+      if (gender === 'female') return '雌性';
+      return '未知';
+    };
+
+    const getSpeciesLabel = (species: string) => {
+      if (species === 'dog') return '犬';
+      if (species === 'cat') return '猫';
+      return species;
+    };
+
+    for (const pet of pets) {
+      const markers = pet.geneMarkers || [];
+      const highRiskCount = markers.filter(
+        (m) => m.marker?.riskLevel === 'high'
+      ).length;
+      const mediumRiskCount = markers.filter(
+        (m) => m.marker?.riskLevel === 'medium'
+      ).length;
+      const carrierCount = markers.filter((m) => {
+        if (!m.zygosity) return false;
+        return m.zygosity === 'heterozygous' && m.marker?.inheritance?.includes('recessive');
+      }).length;
+      const lowRiskCount = markers.filter(
+        (m) => m.marker?.riskLevel === 'low' || (!m.marker?.riskLevel)
+      ).length;
+      const total = markers.length;
+
+      let markerSummary = '未检测';
+      if (total > 0) {
+        const summaryParts = [];
+        summaryParts.push(`共检测 ${total} 个位点`);
+        if (highRiskCount > 0) summaryParts.push(`高风险 ${highRiskCount} 个`);
+        if (mediumRiskCount > 0) summaryParts.push(`中风险 ${mediumRiskCount} 个`);
+        if (carrierCount > 0) summaryParts.push(`携带 ${carrierCount} 个`);
+        if (lowRiskCount > 0 && summaryParts.length === 1) {
+          summaryParts.push(`低风险/正常 ${lowRiskCount} 个`);
+        }
+        markerSummary = summaryParts.join('，');
+      }
+
+      worksheet.addRow({
+        name: pet.name,
+        species: getSpeciesLabel(pet.species),
+        breed: pet.breed || '未知',
+        gender: getGenderLabel(pet.gender),
+        birthDate: pet.birthDate
+          ? new Date(pet.birthDate).toLocaleDateString('zh-CN')
+          : '未知',
+        markerTotal: total,
+        highRiskCount,
+        mediumRiskCount,
+        carrierCount,
+        lowRiskCount,
+        markerSummary,
+      });
+    }
+
+    worksheet.eachRow((row, rowNumber) => {
+      row.alignment = { vertical: 'middle', horizontal: 'left' };
+      if (rowNumber > 1) {
+        row.border = {
+          top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+          bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
+        };
+      }
+    });
+
+    const dataRows = worksheet.getRows(2, pets.length) || [];
+    for (const row of dataRows) {
+      const highRiskCell = row.getCell('highRiskCount');
+      if (highRiskCell.value && (highRiskCell.value as number) > 0) {
+        highRiskCell.font = { color: { argb: 'FFDC2626' } };
+        highRiskCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFEE2E2' },
+        };
+      }
+      const mediumRiskCell = row.getCell('mediumRiskCount');
+      if (mediumRiskCell.value && (mediumRiskCell.value as number) > 0) {
+        mediumRiskCell.font = { color: { argb: 'FFD97706' } };
+        mediumRiskCell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFBEB' },
+        };
+      }
+    }
+
+    const filename = `pets_export_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodeURIComponent(filename)}"`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('导出宠物列表失败:', error);
+    res.status(500).json({ error: '导出宠物列表失败' });
   }
 });
 
