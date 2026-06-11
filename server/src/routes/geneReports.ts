@@ -14,12 +14,62 @@ const archiver = require('archiver');
 
 const router = Router();
 
+export const APPOINTMENT_LINKABLE_STATUSES = ['pending', 'confirmed', 'testing'] as const;
+export type AppointmentLinkableStatus = typeof APPOINTMENT_LINKABLE_STATUSES[number];
+
+export const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
+  pending: '待确认',
+  confirmed: '已确认',
+  testing: '检测中',
+  completed: '已完成',
+  cancelled: '已取消',
+};
+
 function parseParsedData(parsedData: string | null): any {
   if (!parsedData) return null;
   try {
     return JSON.parse(parsedData);
   } catch {
     return parsedData;
+  }
+}
+
+export async function validateAppointmentForLink(appointmentId: string, petId: string) {
+  const appointment = await prisma.geneTestAppointment.findUnique({
+    where: { id: appointmentId },
+  });
+  if (!appointment) {
+    return { valid: false as const, error: '预约记录不存在' };
+  }
+  if (appointment.petId !== petId) {
+    return { valid: false as const, error: '预约记录与宠物不匹配' };
+  }
+  if (!APPOINTMENT_LINKABLE_STATUSES.includes(appointment.status as AppointmentLinkableStatus)) {
+    const statusLabel = APPOINTMENT_STATUS_LABELS[appointment.status] || appointment.status;
+    return {
+      valid: false as const,
+      error: `预约当前状态为「${statusLabel}」，不允许关联上传报告`,
+    };
+  }
+  return { valid: true as const, appointment };
+}
+
+export async function rollbackAppointmentStatusIfNeeded(appointmentId: string | null | undefined) {
+  if (!appointmentId) return;
+  try {
+    const apt = await prisma.geneTestAppointment.findUnique({
+      where: { id: appointmentId },
+      select: { status: true },
+    });
+    if (apt && apt.status === 'testing') {
+      await prisma.geneTestAppointment.update({
+        where: { id: appointmentId },
+        data: { status: 'confirmed' },
+      });
+      console.log(`[Appointment Rollback] 预约 ${appointmentId} 状态已从 testing 回滚至 confirmed`);
+    }
+  } catch (rollbackErr) {
+    console.error(`[Appointment Rollback] 预约 ${appointmentId} 回滚失败:`, rollbackErr);
   }
 }
 
@@ -95,9 +145,11 @@ router.get('/:id', async (req, res) => {
 });
 
 router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) => {
+  const reportContext: { reportId?: string; appointmentId?: string } = {};
   try {
     const { petId } = req.params;
     const { appointmentId } = req.body;
+    reportContext.appointmentId = appointmentId;
 
     if (!req.file) {
       return res.status(400).json({ error: '请上传文件' });
@@ -109,11 +161,9 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
     }
 
     if (appointmentId) {
-      const appointment = await prisma.geneTestAppointment.findUnique({
-        where: { id: appointmentId },
-      });
-      if (!appointment || appointment.petId !== petId) {
-        return res.status(400).json({ error: '预约记录不存在或与宠物不匹配' });
+      const validation = await validateAppointmentForLink(appointmentId, petId);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
       }
     }
 
@@ -129,13 +179,12 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
         appointmentId: appointmentId || null,
       },
     });
+    reportContext.reportId = report.id;
 
     if (appointmentId) {
       await prisma.geneTestAppointment.update({
         where: { id: appointmentId },
-        data: {
-          status: 'testing',
-        },
+        data: { status: 'testing' },
       });
     }
 
@@ -148,6 +197,7 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
     });
 
     setImmediate(async () => {
+      let parseSuccess = false;
       try {
         const filePath = path.join(uploadDir, req.file.filename);
         let parsedData;
@@ -163,6 +213,7 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
         }
 
         await saveParsedReport(petId, report.id, parsedData);
+        parseSuccess = true;
 
         if (appointmentId) {
           await prisma.geneTestAppointment.update({
@@ -181,10 +232,20 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
           where: { id: report.id },
           data: { status: 'failed' },
         });
+        if (appointmentId) {
+          await rollbackAppointmentStatusIfNeeded(appointmentId);
+        }
       }
     });
   } catch (error) {
     console.error('上传基因报告失败:', error);
+    if (reportContext.reportId) {
+      await prisma.geneReport.update({
+        where: { id: reportContext.reportId },
+        data: { status: 'failed' },
+      }).catch(() => {});
+    }
+    await rollbackAppointmentStatusIfNeeded(reportContext.appointmentId);
     res.status(500).json({ error: '上传基因报告失败' });
   }
 });
@@ -200,11 +261,9 @@ router.post('/mock/:petId', async (req, res) => {
     }
 
     if (appointmentId) {
-      const appointment = await prisma.geneTestAppointment.findUnique({
-        where: { id: appointmentId },
-      });
-      if (!appointment || appointment.petId !== petId) {
-        return res.status(400).json({ error: '预约记录不存在或与宠物不匹配' });
+      const validation = await validateAppointmentForLink(appointmentId, petId);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
       }
     }
 
