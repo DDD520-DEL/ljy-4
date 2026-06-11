@@ -572,6 +572,92 @@ function parseRiskAssessment(riskAssessment: string | null): any {
   }
 }
 
+const BREED_WEIGHT_STANDARDS: Record<string, Record<string, { min: number; max: number; unit: string }>> = {
+  dog: {
+    '金毛寻回犬': { min: 25, max: 36, unit: 'kg' },
+    '拉布拉多': { min: 25, max: 36, unit: 'kg' },
+    '德国牧羊犬': { min: 22, max: 40, unit: 'kg' },
+    '边境牧羊犬': { min: 12, max: 20, unit: 'kg' },
+    '柯基': { min: 10, max: 14, unit: 'kg' },
+    '柴犬': { min: 8, max: 11, unit: 'kg' },
+    '比熊': { min: 3, max: 5, unit: 'kg' },
+    '贵宾犬(标准)': { min: 20, max: 32, unit: 'kg' },
+    '贵宾犬(迷你)': { min: 6, max: 9, unit: 'kg' },
+    '贵宾犬(玩具)': { min: 2, max: 4, unit: 'kg' },
+    '萨摩耶': { min: 16, max: 30, unit: 'kg' },
+    '哈士奇': { min: 16, max: 27, unit: 'kg' },
+    '阿拉斯加': { min: 32, max: 45, unit: 'kg' },
+    '斗牛犬': { min: 18, max: 25, unit: 'kg' },
+    '法斗': { min: 8, max: 14, unit: 'kg' },
+    '吉娃娃': { min: 1.5, max: 3, unit: 'kg' },
+    '博美': { min: 1.8, max: 3.5, unit: 'kg' },
+    '约克夏': { min: 2, max: 3.5, unit: 'kg' },
+    '雪纳瑞(迷你)': { min: 5, max: 8, unit: 'kg' },
+    '雪纳瑞(标准)': { min: 14, max: 20, unit: 'kg' },
+    '松狮': { min: 20, max: 32, unit: 'kg' },
+    '中华田园犬': { min: 10, max: 25, unit: 'kg' },
+  },
+  cat: {
+    '英短': { min: 4, max: 8, unit: 'kg' },
+    '美短': { min: 3.5, max: 7, unit: 'kg' },
+    '布偶猫': { min: 4.5, max: 9, unit: 'kg' },
+    '波斯猫': { min: 3, max: 7, unit: 'kg' },
+    '暹罗猫': { min: 2.5, max: 6, unit: 'kg' },
+    '缅因猫': { min: 5, max: 11, unit: 'kg' },
+    '苏格兰折耳': { min: 3, max: 6, unit: 'kg' },
+    '俄罗斯蓝猫': { min: 3, max: 7, unit: 'kg' },
+    '孟加拉豹猫': { min: 4, max: 7, unit: 'kg' },
+    '狸花猫': { min: 3, max: 6, unit: 'kg' },
+    '橘猫': { min: 3.5, max: 7, unit: 'kg' },
+    '加菲猫': { min: 3, max: 6.5, unit: 'kg' },
+    '斯芬克斯': { min: 3, max: 6, unit: 'kg' },
+    '中华田园猫': { min: 3, max: 6, unit: 'kg' },
+  },
+};
+
+router.get('/breeds/weight-standard', async (req, res) => {
+  try {
+    const { species, breed } = req.query;
+
+    if (!species || !breed) {
+      return res.status(400).json({ error: '请提供 species 和 breed 参数' });
+    }
+
+    const speciesStandards = BREED_WEIGHT_STANDARDS[species as string];
+    if (!speciesStandards) {
+      return res.json({ standard: null, message: '该物种暂无标准体重数据' });
+    }
+
+    const breedName = breed as string;
+    let standard = speciesStandards[breedName];
+
+    if (!standard) {
+      const matchedKey = Object.keys(speciesStandards).find(
+        (key) => breedName.includes(key) || key.includes(breedName)
+      );
+      if (matchedKey) {
+        standard = speciesStandards[matchedKey];
+      }
+    }
+
+    if (!standard) {
+      const allWeights = Object.values(speciesStandards);
+      const avgMin = +(allWeights.reduce((s, w) => s + w.min, 0) / allWeights.length).toFixed(1);
+      const avgMax = +(allWeights.reduce((s, w) => s + w.max, 0) / allWeights.length).toFixed(1);
+      return res.json({
+        standard: { min: avgMin, max: avgMax, unit: 'kg' },
+        isEstimated: true,
+        message: '未找到该品种的精确数据，已提供同物种参考范围',
+      });
+    }
+
+    res.json({ standard, isEstimated: false, message: '已找到该品种标准体重范围' });
+  } catch (error) {
+    console.error('获取品种标准体重失败:', error);
+    res.status(500).json({ error: '获取品种标准体重失败' });
+  }
+});
+
 router.get('/:id/transfers', async (req, res) => {
   try {
     const { id } = req.params;

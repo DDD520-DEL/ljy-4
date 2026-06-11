@@ -532,6 +532,18 @@ export interface GeneTestAppointment {
   geneReports?: GeneReport[];
 }
 
+export interface BreedWeightStandard {
+  min: number;
+  max: number;
+  unit: string;
+}
+
+export interface BreedWeightStandardResponse {
+  standard: BreedWeightStandard | null;
+  isEstimated?: boolean;
+  message: string;
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -548,6 +560,10 @@ export const petApi = {
     api.put<any, WeightRecord>(`/pets/${id}/weights/${recordId}`, data),
   removeWeight: (id: string, recordId: string) =>
     api.delete<any, { message: string }>(`/pets/${id}/weights/${recordId}`),
+  getBreedWeightStandard: (species: string, breed: string) =>
+    api.get<any, BreedWeightStandardResponse>('/pets/breeds/weight-standard', {
+      params: { species, breed },
+    }),
   listTransfers: (id: string, owner?: string) =>
     api.get<any, PetTransfer[]>(`/pets/${id}/transfers`, { params: { owner } }),
   createTransfer: (id: string, data: Partial<PetTransfer>) =>

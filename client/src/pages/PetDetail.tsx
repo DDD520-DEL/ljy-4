@@ -22,8 +22,23 @@ import {
   Building2,
   FlaskConical,
   Syringe,
+  Scale,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from 'lucide-react';
-import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord } from '../services/api';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  ReferenceArea,
+} from 'recharts';
+import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord, WeightRecord, BreedWeightStandard } from '../services/api';
 
 export default function PetDetail() {
   const { id } = useParams<{ id: string }>();
@@ -31,7 +46,19 @@ export default function PetDetail() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines' | 'weight'>('info');
+  const [weights, setWeights] = useState<WeightRecord[]>([]);
+  const [weightsLoading, setWeightsLoading] = useState(false);
+  const [showWeightForm, setShowWeightForm] = useState(false);
+  const [editingWeight, setEditingWeight] = useState<WeightRecord | null>(null);
+  const [weightForm, setWeightForm] = useState({
+    weight: '',
+    recordedAt: new Date().toISOString().split('T')[0],
+    note: '',
+  });
+  const [weightStandard, setWeightStandard] = useState<BreedWeightStandard | null>(null);
+  const [weightStandardInfo, setWeightStandardInfo] = useState<{ isEstimated?: boolean; message: string }>({ message: '' });
+  const [weightStandardLoading, setWeightStandardLoading] = useState(false);
   const [transfers, setTransfers] = useState<PetTransfer[]>([]);
   const [transfersLoading, setTransfersLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -100,6 +127,106 @@ export default function PetDetail() {
       loadVaccines();
     }
   }, [id, activeTab]);
+
+  useEffect(() => {
+    if (id && activeTab === 'weight') {
+      loadWeights();
+      loadWeightStandard();
+    }
+  }, [id, activeTab, pet?.species, pet?.breed]);
+
+  async function loadWeights() {
+    if (!id) return;
+    setWeightsLoading(true);
+    try {
+      const data = await petApi.listWeights(id);
+      setWeights(data);
+    } catch (error) {
+      console.error('加载体重记录失败:', error);
+    } finally {
+      setWeightsLoading(false);
+    }
+  }
+
+  async function loadWeightStandard() {
+    if (!pet?.species || !pet?.breed) return;
+    setWeightStandardLoading(true);
+    try {
+      const data = await petApi.getBreedWeightStandard(pet.species, pet.breed);
+      setWeightStandard(data.standard);
+      setWeightStandardInfo({ isEstimated: data.isEstimated, message: data.message });
+    } catch (error) {
+      console.error('加载品种标准体重失败:', error);
+    } finally {
+      setWeightStandardLoading(false);
+    }
+  }
+
+  function resetWeightForm() {
+    setWeightForm({
+      weight: '',
+      recordedAt: new Date().toISOString().split('T')[0],
+      note: '',
+    });
+    setEditingWeight(null);
+    setShowWeightForm(false);
+  }
+
+  function handleEditWeight(record: WeightRecord) {
+    setEditingWeight(record);
+    setWeightForm({
+      weight: String(record.weight),
+      recordedAt: record.recordedAt.split('T')[0],
+      note: record.note || '',
+    });
+    setShowWeightForm(true);
+  }
+
+  async function handleSubmitWeight(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+
+    const weightNum = parseFloat(weightForm.weight);
+    if (isNaN(weightNum) || weightNum <= 0) {
+      alert('请输入有效的体重');
+      return;
+    }
+
+    try {
+      if (editingWeight) {
+        await petApi.updateWeight(id, editingWeight.id, {
+          weight: weightNum,
+          recordedAt: weightForm.recordedAt,
+          note: weightForm.note || null,
+        });
+      } else {
+        await petApi.createWeight(id, {
+          weight: weightNum,
+          recordedAt: weightForm.recordedAt,
+          note: weightForm.note || null,
+        });
+      }
+      resetWeightForm();
+      loadWeights();
+      loadPet();
+    } catch (error) {
+      console.error('保存体重记录失败:', error);
+      alert('保存失败，请重试');
+    }
+  }
+
+  async function handleDeleteWeight(recordId: string) {
+    if (!id) return;
+    if (!confirm('确定要删除这条体重记录吗？')) return;
+
+    try {
+      await petApi.removeWeight(id, recordId);
+      loadWeights();
+    } catch (error) {
+      console.error('删除体重记录失败:', error);
+      alert('删除失败，请重试');
+    }
+  }
 
   async function loadAppointments() {
     if (!id) return;
@@ -524,6 +651,7 @@ export default function PetDetail() {
             <div className="flex border-b border-gray-200">
               {[
                 { key: 'info', label: '基本信息', icon: PawPrint },
+                { key: 'weight', label: '体重追踪', icon: Scale },
                 { key: 'relations', label: '亲属关系', icon: Network },
                 { key: 'genes', label: '基因标记', icon: Dna },
                 { key: 'reports', label: '基因报告', icon: FileText },
@@ -1577,6 +1705,359 @@ export default function PetDetail() {
                       </table>
                     </div>
                   )}
+                </div>
+              )}
+
+              {activeTab === 'weight' && (
+                <div className="space-y-6">
+                  {weightStandard && (
+                    <div className={`p-4 rounded-lg border ${weightStandardInfo.isEstimated ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                            <Scale className="w-4 h-4" />
+                            {pet?.breed || '该品种'}标准体重范围
+                            {weightStandardInfo.isEstimated && (
+                              <span className="text-xs px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                                参考值
+                              </span>
+                            )}
+                          </h4>
+                          <p className="text-sm text-gray-600 mt-1">
+                            {weightStandard.min} kg ~ {weightStandard.max} kg
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">{weightStandardInfo.message}</p>
+                        </div>
+                        {pet?.weight && weightStandard && (
+                          <div className="text-right">
+                            <p className="text-xs text-gray-500">当前体重</p>
+                            <p className={`font-semibold ${
+                              pet.weight < weightStandard.min
+                                ? 'text-blue-600'
+                                : pet.weight > weightStandard.max
+                                ? 'text-orange-600'
+                                : 'text-green-600'
+                            }`}>
+                              {pet.weight} kg
+                              {pet.weight < weightStandard.min && ' 偏轻'}
+                              {pet.weight > weightStandard.max && ' 偏重'}
+                              {pet.weight >= weightStandard.min && pet.weight <= weightStandard.max && ' 正常'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <h3 className="text-sm font-medium text-gray-900">体重变化趋势</h3>
+                    <button
+                      onClick={() => {
+                        resetWeightForm();
+                        setShowWeightForm(true);
+                      }}
+                      className="flex items-center gap-1 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                      录入体重
+                    </button>
+                  </div>
+
+                  {showWeightForm && (
+                    <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-medium text-gray-900">
+                          {editingWeight ? '编辑体重记录' : '录入体重记录'}
+                        </h4>
+                        <button
+                          onClick={resetWeightForm}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSubmitWeight} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              体重 (kg) <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Scale className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0.01"
+                                required
+                                value={weightForm.weight}
+                                onChange={(e) => setWeightForm({ ...weightForm, weight: e.target.value })}
+                                className="w-full pl-9 pr-12 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                placeholder="请输入体重"
+                              />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">kg</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              测量日期 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="date"
+                                required
+                                value={weightForm.recordedAt}
+                                onChange={(e) => setWeightForm({ ...weightForm, recordedAt: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            备注
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={weightForm.note}
+                            onChange={(e) => setWeightForm({ ...weightForm, note: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                            placeholder="如：空腹测量、刚洗完澡等..."
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={resetWeightForm}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                          >
+                            取消
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                          >
+                            {editingWeight ? '保存修改' : '添加记录'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  <div className="bg-white border border-gray-200 rounded-lg p-4">
+                    {weightsLoading ? (
+                      <div className="text-center py-12 text-gray-500">加载中...</div>
+                    ) : weights.length === 0 ? (
+                      <div className="text-center py-12">
+                        <Scale className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                        <p className="text-gray-500">暂无体重记录</p>
+                        <p className="text-sm text-gray-400 mt-1">点击上方按钮录入第一条体重记录</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="h-72 mb-4">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart
+                              data={[...weights].sort((a, b) => new Date(a.recordedAt).getTime() - new Date(b.recordedAt).getTime()).map((w) => ({
+                                ...w,
+                                dateLabel: new Date(w.recordedAt).toLocaleDateString('zh-CN'),
+                              }))}
+                              margin={{ top: 20, right: 30, left: 10, bottom: 10 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                              <XAxis
+                                dataKey="dateLabel"
+                                tick={{ fontSize: 11, fill: '#6b7280' }}
+                                tickLine={false}
+                              />
+                              <YAxis
+                                tick={{ fontSize: 11, fill: '#6b7280' }}
+                                tickLine={false}
+                                unit="kg"
+                                domain={['dataMin - 1', 'dataMax + 1']}
+                              />
+                              <Tooltip
+                                contentStyle={{
+                                  backgroundColor: '#fff',
+                                  border: '1px solid #e5e7eb',
+                                  borderRadius: '8px',
+                                  fontSize: '12px',
+                                }}
+                                formatter={(value: any) => [`${value} kg`, '体重']}
+                                labelFormatter={(label) => `日期: ${label}`}
+                              />
+                              <Legend wrapperStyle={{ fontSize: '12px' }} />
+                              {weightStandard && weights.length > 0 && (
+                                <>
+                                  <ReferenceArea
+                                    y1={weightStandard.min}
+                                    y2={weightStandard.max}
+                                    stroke="none"
+                                    fill="#10b981"
+                                    fillOpacity={0.1}
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey={() => weightStandard.max}
+                                    stroke="#10b981"
+                                    strokeDasharray="5 5"
+                                    strokeWidth={1.5}
+                                    dot={false}
+                                    name={`标准上限 (${weightStandard.max}kg)`}
+                                    legendType="none"
+                                  />
+                                  <Line
+                                    type="monotone"
+                                    dataKey={() => weightStandard.min}
+                                    stroke="#10b981"
+                                    strokeDasharray="5 5"
+                                    strokeWidth={1.5}
+                                    dot={false}
+                                    name={`标准下限 (${weightStandard.min}kg)`}
+                                    legendType="none"
+                                  />
+                                </>
+                              )}
+                              <Line
+                                type="monotone"
+                                dataKey="weight"
+                                stroke="#4f46e5"
+                                strokeWidth={2.5}
+                                dot={{ fill: '#4f46e5', strokeWidth: 2, r: 4 }}
+                                activeDot={{ r: 6, fill: '#4f46e5' }}
+                                name="体重"
+                              />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+
+                        {weightStandard && (
+                          <div className="flex flex-wrap items-center gap-4 mb-4 px-2 text-xs text-gray-600">
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-4 h-0.5 bg-indigo-600 inline-block"></span>
+                              <span>体重记录</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-4 h-0.5 border-t-2 border-dashed border-green-500 inline-block"></span>
+                              <span>标准范围上下限</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className="w-4 h-3 bg-green-500 bg-opacity-10 border border-green-200 rounded-sm inline-block"></span>
+                              <span>标准体重区间</span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-gray-200">
+                                <th className="text-left py-3 px-3 font-medium text-gray-600">测量日期</th>
+                                <th className="text-left py-3 px-3 font-medium text-gray-600">体重</th>
+                                <th className="text-left py-3 px-3 font-medium text-gray-600">变化</th>
+                                <th className="text-left py-3 px-3 font-medium text-gray-600">与标准范围</th>
+                                <th className="text-left py-3 px-3 font-medium text-gray-600">备注</th>
+                                <th className="text-right py-3 px-3 font-medium text-gray-600">操作</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {[...weights].sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime()).map((record, index, sortedArr) => {
+                                const prevRecord = sortedArr[index + 1];
+                                const delta = prevRecord ? +(record.weight - prevRecord.weight).toFixed(2) : null;
+                                const deltaPercent = prevRecord && prevRecord.weight > 0
+                                  ? +((delta! / prevRecord.weight) * 100).toFixed(1)
+                                  : null;
+                                const inRange = weightStandard
+                                  ? record.weight >= weightStandard.min && record.weight <= weightStandard.max
+                                  : null;
+                                return (
+                                  <tr
+                                    key={record.id}
+                                    className="border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <td className="py-3 px-3 text-gray-700">
+                                      {new Date(record.recordedAt).toLocaleDateString('zh-CN')}
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      <span className="font-medium text-gray-900">{record.weight}</span>
+                                      <span className="text-gray-500 ml-1">kg</span>
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      {delta === null ? (
+                                        <span className="text-gray-400 text-xs">-</span>
+                                      ) : delta > 0 ? (
+                                        <span className="inline-flex items-center gap-0.5 text-orange-600 text-xs font-medium">
+                                          <TrendingUp className="w-3 h-3" />
+                                          +{delta} kg (+{deltaPercent}%)
+                                        </span>
+                                      ) : delta < 0 ? (
+                                        <span className="inline-flex items-center gap-0.5 text-blue-600 text-xs font-medium">
+                                          <TrendingDown className="w-3 h-3" />
+                                          {delta} kg ({deltaPercent}%)
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-0.5 text-gray-500 text-xs">
+                                          <Minus className="w-3 h-3" />
+                                          无变化
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      {weightStandard ? (
+                                        inRange ? (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs font-medium">
+                                            <CheckCircle className="w-3 h-3" />
+                                            正常范围
+                                          </span>
+                                        ) : record.weight < weightStandard.min ? (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 rounded text-xs font-medium">
+                                            低于标准 {(weightStandard.min - record.weight).toFixed(2)}kg
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-50 text-orange-700 rounded text-xs font-medium">
+                                            超出标准 {(record.weight - weightStandard.max).toFixed(2)}kg
+                                          </span>
+                                        )
+                                      ) : (
+                                        <span className="text-gray-400 text-xs">-</span>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-3 text-gray-600 max-w-[180px]">
+                                      {record.note ? (
+                                        <span className="truncate block" title={record.note}>
+                                          {record.note}
+                                        </span>
+                                      ) : (
+                                        <span className="text-gray-400">-</span>
+                                      )}
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      <div className="flex justify-end gap-1">
+                                        <button
+                                          onClick={() => handleEditWeight(record)}
+                                          className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                                          title="编辑"
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                          onClick={() => handleDeleteWeight(record.id)}
+                                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                          title="删除"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
