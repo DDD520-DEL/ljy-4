@@ -7,6 +7,7 @@ import {
   Settings,
   Home,
   Activity,
+  BookOpen,
 } from 'lucide-react';
 import SearchBar from './components/SearchBar';
 import AlertBanner from './components/AlertBanner';
@@ -22,10 +23,12 @@ import BreedingManage from './pages/BreedingManage';
 import BreedingPairDetail from './pages/BreedingPairDetail';
 import PetTimeline from './pages/PetTimeline';
 import GeneticDashboard from './pages/GeneticDashboard';
+import BreedEncyclopedia from './pages/BreedEncyclopedia';
 
 const navItems = [
   { path: '/', label: '首页', icon: Home, exact: true },
   { path: '/pets', label: '宠物管理', icon: PawPrint },
+  { path: '/breeds', label: '品种百科', icon: BookOpen },
   { path: '/pedigree', label: '谱系图', icon: Network },
   { path: '/gene-reports', label: '基因报告', icon: Dna },
   { path: '/genetic-dashboard', label: '遗传看板', icon: Activity },
@@ -116,6 +119,7 @@ function App() {
             <Route path="/genetic-dashboard" element={<GeneticDashboard />} />
             <Route path="/breeding" element={<BreedingManage />} />
             <Route path="/breeding/:id" element={<BreedingPairDetail />} />
+            <Route path="/breeds" element={<BreedEncyclopedia />} />
           </Routes>
         </div>
       </main>
@@ -253,6 +257,7 @@ function getPageTitle(pathname: string): string {
   if (pathname.startsWith('/pets/') && pathname.includes('/timeline')) return '时间轴';
   if (pathname.startsWith('/pets/')) return '宠物详情';
   if (pathname === '/pets') return '宠物管理';
+  if (pathname === '/breeds') return '品种百科';
   if (pathname.startsWith('/pedigree')) return '谱系图';
   if (pathname.startsWith('/gene-reports/')) return '基因报告详情';
   if (pathname === '/gene-reports') return '基因报告';
@@ -270,6 +275,7 @@ function getPageSubtitle(pathname: string): string {
   if (pathname.startsWith('/pets/') && pathname.includes('/timeline')) return '查看宠物成长历程';
   if (pathname.startsWith('/pets/')) return '查看宠物详细信息和遗传数据';
   if (pathname === '/pets') return '管理所有宠物的基本信息';
+  if (pathname === '/breeds') return '了解不同宠物品种的特点、遗传病和饲养要点';
   if (pathname.startsWith('/pedigree')) return '可视化展示宠物家族谱系关系';
   if (pathname.startsWith('/gene-reports/')) return '查看基因检测报告详细解析';
   if (pathname === '/gene-reports') return '上传和管理基因检测报告';

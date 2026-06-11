@@ -532,6 +532,22 @@ export interface GeneTestAppointment {
   geneReports?: GeneReport[];
 }
 
+export interface Breed {
+  id: string;
+  name: string;
+  species: string;
+  origin: string | null;
+  avgLifespan: string | null;
+  commonDiseases: string[] | null;
+  carePoints: string[] | null;
+  description: string | null;
+  avatarUrl: string | null;
+  sizeCategory: string | null;
+  temperament: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BreedWeightStandard {
   min: number;
   max: number;
@@ -833,6 +849,15 @@ export const geneTestAppointmentApi = {
     api.put<any, GeneTestAppointment>(`/gene-test-appointments/${id}/status`, { status }),
   remove: (id: string) =>
     api.delete<any, { message: string }>(`/gene-test-appointments/${id}`),
+};
+
+export const breedApi = {
+  list: (params?: { species?: string; search?: string }) =>
+    api.get<any, Breed[]>('/breeds', { params }),
+  get: (id: string) => api.get<any, Breed>(`/breeds/${id}`),
+  create: (data: Partial<Breed>) => api.post<any, Breed>('/breeds', data),
+  update: (id: string, data: Partial<Breed>) => api.put<any, Breed>(`/breeds/${id}`, data),
+  remove: (id: string) => api.delete<any, { message: string }>(`/breeds/${id}`),
 };
 
 export default api;

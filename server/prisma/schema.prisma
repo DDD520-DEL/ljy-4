@@ -266,3 +266,22 @@ model PetDailyLog {
   @@index([petId])
   @@index([createdAt])
 }
+
+model Breed {
+  id              String   @id @default(uuid())
+  name            String
+  species         String   // dog, cat, etc.
+  origin          String?  // 原产地
+  avgLifespan     String?  // 平均寿命
+  commonDiseases  String?  // 常见遗传病，JSON数组字符串
+  carePoints      String?  // 饲养要点，JSON数组字符串
+  description     String?  // 品种描述
+  avatarUrl       String?  // 品种图片
+  sizeCategory    String?  // 体型分类：small, medium, large
+  temperament     String?  // 性格特点
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([name, species])
+  @@index([species])
+}
