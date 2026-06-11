@@ -206,6 +206,7 @@ router.put('/:id', async (req, res) => {
     }
 
     const updateData: any = {};
+    if (data.petId !== undefined) updateData.petId = data.petId;
     if (data.title !== undefined) updateData.title = data.title;
     if (data.remindAt !== undefined) updateData.remindAt = new Date(data.remindAt);
     if (data.notes !== undefined) updateData.notes = data.notes;

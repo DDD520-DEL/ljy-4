@@ -28,17 +28,21 @@ export default function ReminderForm({ petId, reminder, onClose, onSuccess }: Pr
       setSelectedPetId(reminder.petId);
       setTitle(reminder.title);
       const dt = new Date(reminder.remindAt);
-      const offset = dt.getTimezoneOffset();
-      const localDT = new Date(dt.getTime() - offset * 60 * 1000);
-      setRemindDate(localDT.toISOString().split('T')[0]);
-      setRemindTime(localDT.toTimeString().slice(0, 5));
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const d = String(dt.getDate()).padStart(2, '0');
+      const h = String(dt.getHours()).padStart(2, '0');
+      const min = String(dt.getMinutes()).padStart(2, '0');
+      setRemindDate(`${y}-${m}-${d}`);
+      setRemindTime(`${h}:${min}`);
       setNotes(reminder.notes || '');
     } else {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const offset = tomorrow.getTimezoneOffset();
-      const localTomorrow = new Date(tomorrow.getTime() - offset * 60 * 1000);
-      setRemindDate(localTomorrow.toISOString().split('T')[0]);
+      const y = tomorrow.getFullYear();
+      const m = String(tomorrow.getMonth() + 1).padStart(2, '0');
+      const d = String(tomorrow.getDate()).padStart(2, '0');
+      setRemindDate(`${y}-${m}-${d}`);
     }
   }, [reminder]);
 

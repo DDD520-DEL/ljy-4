@@ -54,6 +54,23 @@ export default function ReminderSidebar({ refreshTrigger }: Props) {
     }
   }
 
+  function getReminderCategory(remindAt: string): 'today' | 'upcoming' | 'none' {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const endOf7Days = new Date(endOfDay.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const date = new Date(remindAt);
+    if (date <= endOfDay) return 'today';
+    if (date <= endOf7Days) return 'upcoming';
+    return 'none';
+  }
+
+  function insertSorted(list: Reminder[], item: Reminder): Reminder[] {
+    const result = [...list, item];
+    result.sort((a, b) => new Date(a.remindAt).getTime() - new Date(b.remindAt).getTime());
+    return result;
+  }
+
   async function handleToggleComplete(reminder: Reminder) {
     setActionIds((prev) => new Set(prev).add(reminder.id));
     try {
@@ -62,6 +79,7 @@ export default function ReminderSidebar({ refreshTrigger }: Props) {
         if (!prev) return prev;
         const isInToday = prev.today.some((r) => r.id === reminder.id);
         const isInUpcoming = prev.upcoming.some((r) => r.id === reminder.id);
+        const wasOverdue = isInToday && isOverdue(reminder);
 
         if (updated.isCompleted) {
           return {
@@ -72,13 +90,64 @@ export default function ReminderSidebar({ refreshTrigger }: Props) {
               ...prev.stats,
               todayCount: isInToday ? prev.stats.todayCount - 1 : prev.stats.todayCount,
               upcomingCount: isInUpcoming ? prev.stats.upcomingCount - 1 : prev.stats.upcomingCount,
-              overdueCount: isInToday && isOverdue(reminder)
+              overdueCount: wasOverdue
+                ? prev.stats.overdueCount - 1
+                : prev.stats.overdueCount,
+            },
+          };
+        } else {
+          const category = getReminderCategory(updated.remindAt);
+          if (category === 'today') {
+            const alreadyExists = prev.today.some((r) => r.id === updated.id);
+            const newToday = alreadyExists
+              ? prev.today.map((r) => (r.id === updated.id ? updated : r))
+              : insertSorted(prev.today, updated);
+            const newOverdue = isOverdue(updated)
+              ? prev.stats.overdueCount + (wasOverdue ? 0 : 1)
+              : prev.stats.overdueCount - (wasOverdue ? 1 : 0);
+            return {
+              ...prev,
+              today: newToday,
+              upcoming: prev.upcoming.filter((r) => r.id !== updated.id),
+              stats: {
+                ...prev.stats,
+                todayCount: alreadyExists ? prev.stats.todayCount : prev.stats.todayCount + 1,
+                upcomingCount: isInUpcoming ? prev.stats.upcomingCount - 1 : prev.stats.upcomingCount,
+                overdueCount: Math.max(0, newOverdue),
+              },
+            };
+          } else if (category === 'upcoming') {
+            const alreadyExists = prev.upcoming.some((r) => r.id === updated.id);
+            return {
+              ...prev,
+              today: prev.today.filter((r) => r.id !== updated.id),
+              upcoming: alreadyExists
+                ? prev.upcoming.map((r) => (r.id === updated.id ? updated : r))
+                : insertSorted(prev.upcoming, updated),
+              stats: {
+                ...prev.stats,
+                todayCount: isInToday ? prev.stats.todayCount - 1 : prev.stats.todayCount,
+                upcomingCount: alreadyExists ? prev.stats.upcomingCount : prev.stats.upcomingCount + 1,
+                overdueCount: wasOverdue
+                  ? prev.stats.overdueCount - 1
+                  : prev.stats.overdueCount,
+              },
+            };
+          }
+          return {
+            ...prev,
+            today: prev.today.filter((r) => r.id !== updated.id),
+            upcoming: prev.upcoming.filter((r) => r.id !== updated.id),
+            stats: {
+              ...prev.stats,
+              todayCount: isInToday ? prev.stats.todayCount - 1 : prev.stats.todayCount,
+              upcomingCount: isInUpcoming ? prev.stats.upcomingCount - 1 : prev.stats.upcomingCount,
+              overdueCount: wasOverdue
                 ? prev.stats.overdueCount - 1
                 : prev.stats.overdueCount,
             },
           };
         }
-        return prev;
       });
     } catch (error) {
       console.error('切换完成状态失败:', error);
