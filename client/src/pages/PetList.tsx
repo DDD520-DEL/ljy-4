@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock, GitCompareArrows, X, Download } from 'lucide-react';
+import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock, GitCompareArrows, X, Download, AlertCircle } from 'lucide-react';
 import { petApi, Pet, alertApi, BreedingAlert, PetCompareData } from '../services/api';
 import { PetAlertSummary } from '../components/AlertBadge';
 import PetComparePanel from '../components/PetComparePanel';
@@ -15,6 +15,8 @@ export default function PetList() {
   const [compareData, setCompareData] = useState<{ pet1: PetCompareData; pet2: PetCompareData } | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const errorTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const [filters, setFilters] = useState({
     species: searchParams.get('species') || 'all',
@@ -26,6 +28,31 @@ export default function PetList() {
     loadPets();
     loadAlerts();
   }, [filters]);
+
+  useEffect(() => {
+    return () => {
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+      }
+    };
+  }, []);
+
+  function showError(message: string) {
+    if (errorTimerRef.current) {
+      clearTimeout(errorTimerRef.current);
+    }
+    setError(message);
+    errorTimerRef.current = setTimeout(() => {
+      setError(null);
+    }, 5000);
+  }
+
+  function dismissError() {
+    if (errorTimerRef.current) {
+      clearTimeout(errorTimerRef.current);
+    }
+    setError(null);
+  }
 
   async function loadAlerts() {
     try {
@@ -105,6 +132,17 @@ export default function PetList() {
       });
     } catch (error) {
       console.error('导出失败:', error);
+      let errorMessage = '导出失败，请重试';
+      if (error && typeof error === 'object') {
+        if ('error' in error) {
+          errorMessage = String((error as any).error);
+        } else if ('message' in error) {
+          errorMessage = String((error as any).message);
+        }
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      showError(errorMessage);
     } finally {
       setExporting(false);
     }
@@ -142,6 +180,25 @@ export default function PetList() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start justify-between animate-in slide-in-from-top duration-300">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-semibold text-red-800">导出失败</h4>
+              <p className="text-sm text-red-600 mt-1">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={dismissError}
+            className="text-red-400 hover:text-red-600 transition-colors p-1"
+            title="关闭"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">宠物管理</h1>

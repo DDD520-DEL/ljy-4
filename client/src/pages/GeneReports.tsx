@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Clock, Trash2, Dna, Plus, Download, CheckSquare, Square, Calendar, FlaskConical, Building2, Link2 } from 'lucide-react';
+import { Upload, FileText, CheckCircle, AlertCircle, Clock, Trash2, Dna, Plus, Download, CheckSquare, Square, Calendar, FlaskConical, Building2, Link2, X } from 'lucide-react';
 import { geneReportApi, petApi, geneTestAppointmentApi, GeneReport, Pet, GeneTestAppointment, GeneTestAppointmentStatus } from '../services/api';
 
 export default function GeneReports() {
@@ -17,6 +17,50 @@ export default function GeneReports() {
   const [petAppointments, setPetAppointments] = useState<GeneTestAppointment[]>([]);
   const [selectedAppointmentId, setSelectedAppointmentId] = useState<string>('');
   const [showAppointmentUpload, setShowAppointmentUpload] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const errorTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const successTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+      if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    };
+  }, []);
+
+  function showError(message: string) {
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    setError(message);
+    setSuccess(null);
+    errorTimerRef.current = setTimeout(() => setError(null), 5000);
+  }
+
+  function showSuccess(message: string) {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    setSuccess(message);
+    setError(null);
+    successTimerRef.current = setTimeout(() => setSuccess(null), 3000);
+  }
+
+  function dismissError() {
+    if (errorTimerRef.current) clearTimeout(errorTimerRef.current);
+    setError(null);
+  }
+
+  function dismissSuccess() {
+    if (successTimerRef.current) clearTimeout(successTimerRef.current);
+    setSuccess(null);
+  }
+
+  function extractErrorMessage(error: any): string {
+    if (error && typeof error === 'object') {
+      if ('error' in error) return String((error as any).error);
+      if ('message' in error) return String((error as any).message);
+    }
+    if (typeof error === 'string') return error;
+    return '操作失败，请重试';
+  }
 
   useEffect(() => {
     loadPets();
@@ -95,10 +139,11 @@ export default function GeneReports() {
       loadReports();
       loadActiveAppointments();
       loadPetAppointments();
-      alert('文件上传成功，正在解析...');
+      showSuccess('文件上传成功，正在解析...');
       setSelectedAppointmentId('');
     } catch (error) {
-      alert('上传失败');
+      console.error('上传失败:', error);
+      showError(extractErrorMessage(error) || '上传失败');
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
@@ -116,10 +161,11 @@ export default function GeneReports() {
       loadReports();
       loadActiveAppointments();
       loadPetAppointments();
-      alert('文件上传成功，正在解析并更新预约状态...');
+      showSuccess('文件上传成功，正在解析并更新预约状态...');
       setShowAppointmentUpload(null);
     } catch (error) {
-      alert('上传失败');
+      console.error('上传失败:', error);
+      showError(extractErrorMessage(error) || '上传失败');
     } finally {
       setUploading(false);
     }
@@ -135,10 +181,11 @@ export default function GeneReports() {
       loadReports();
       loadActiveAppointments();
       loadPetAppointments();
-      alert('模拟报告已生成！');
+      showSuccess('模拟报告已生成！');
       setSelectedAppointmentId('');
     } catch (error) {
-      alert('生成失败');
+      console.error('生成失败:', error);
+      showError(extractErrorMessage(error) || '生成失败');
     }
   }
 
@@ -152,9 +199,10 @@ export default function GeneReports() {
       loadReports();
       loadActiveAppointments();
       loadPetAppointments();
-      alert('模拟报告已生成，预约状态已更新！');
+      showSuccess('模拟报告已生成，预约状态已更新！');
     } catch (error) {
-      alert('生成失败');
+      console.error('生成失败:', error);
+      showError(extractErrorMessage(error) || '生成失败');
     }
   }
 
@@ -169,14 +217,16 @@ export default function GeneReports() {
         next.delete(id);
         return next;
       });
+      showSuccess('删除成功');
     } catch (error) {
-      alert('删除失败');
+      console.error('删除失败:', error);
+      showError(extractErrorMessage(error) || '删除失败');
     }
   }
 
   async function handleBatchExport() {
     if (selectedIds.size === 0) {
-      alert('请先选择要导出的报告');
+      showError('请先选择要导出的报告');
       return;
     }
 
@@ -187,14 +237,23 @@ export default function GeneReports() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `gene-reports-export-${Date.now()}.zip`;
+      const contentDisposition = response.headers['content-disposition'];
+      let filename = `gene-reports-export-${Date.now()}.zip`;
+      if (contentDisposition) {
+        const matches = contentDisposition.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+        if (matches && matches[1]) {
+          filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+        }
+      }
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+      showSuccess('导出成功');
     } catch (error) {
       console.error('批量导出失败:', error);
-      alert('导出失败，请重试');
+      showError(extractErrorMessage(error) || '导出失败，请重试');
     } finally {
       setExporting(false);
     }
@@ -310,6 +369,44 @@ export default function GeneReports() {
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start justify-between animate-in slide-in-from-top duration-300">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-semibold text-red-800">操作失败</h4>
+              <p className="text-sm text-red-600 mt-1">{error}</p>
+            </div>
+          </div>
+          <button
+            onClick={dismissError}
+            className="text-red-400 hover:text-red-600 transition-colors p-1"
+            title="关闭"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {success && (
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-start justify-between animate-in slide-in-from-top duration-300">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="text-sm font-semibold text-green-800">操作成功</h4>
+              <p className="text-sm text-green-600 mt-1">{success}</p>
+            </div>
+          </div>
+          <button
+            onClick={dismissSuccess}
+            className="text-green-400 hover:text-green-600 transition-colors p-1"
+            title="关闭"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-gray-900">基因报告管理</h1>
         <p className="text-gray-600 mt-1">
