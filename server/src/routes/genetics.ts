@@ -158,12 +158,12 @@ router.get('/offspring/risk', async (req, res) => {
 
 router.get('/markers/template/csv', async (req, res) => {
   try {
-    const buffer = getCsvTemplate();
+    const buffer = await getCsvTemplate();
     const filename = `genetic_markers_template_${Date.now()}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Length', buffer.byteLength);
 
     res.send(buffer);
   } catch (error) {
@@ -180,7 +180,7 @@ router.get('/markers/export/csv', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Content-Length', buffer.byteLength);
 
     res.send(buffer);
   } catch (error) {

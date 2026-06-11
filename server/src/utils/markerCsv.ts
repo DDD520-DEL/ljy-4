@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import ExcelJS from 'exceljs';
+import { Readable } from 'stream';
 import prisma from '../lib/prisma.js';
 
 const VALID_INHERITANCE = [
@@ -20,7 +21,14 @@ const VALID_SPECIES = ['dog', 'cat', 'rabbit', 'bird', 'other'] as const;
 const GeneticMarkerImportSchema = z.object({
   markerName: z.string().min(1, '标记名不能为空'),
   geneName: z.string().min(1, '基因名不能为空'),
-  chromosome: z.string().nullable().optional(),
+  chromosome: z
+    .union([z.string(), z.number()])
+    .nullable()
+    .optional()
+    .transform((val) => {
+      if (val === null || val === undefined || val === '') return null;
+      return String(val);
+    }),
   position: z
     .union([z.string(), z.number(), z.null()])
     .optional()
@@ -156,7 +164,8 @@ export async function parseCsvBuffer(buffer: Buffer): Promise<{
   totalRows: number;
 }> {
   const workbook = new ExcelJS.Workbook();
-  await workbook.csv.read(buffer);
+  const stream = Readable.from(buffer);
+  await workbook.csv.read(stream);
 
   const worksheet = workbook.worksheets[0];
   if (!worksheet) {
@@ -359,11 +368,11 @@ export async function exportGeneticMarkersToCsv(species?: string): Promise<Buffe
     });
   }
 
-  const buffer = await workbook.csv.writeBuffer() as Buffer;
-  return buffer;
+  const buffer = await workbook.csv.writeBuffer();
+  return Buffer.from(buffer);
 }
 
-export function getCsvTemplate(): Buffer {
+export async function getCsvTemplate(): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Genetic Markers Template');
 
@@ -425,7 +434,8 @@ export function getCsvTemplate(): Buffer {
 
   worksheet.getCell('A2').comment = '示例数据 - 请在导入前删除此行及以下示例行';
 
-  return workbook.csv.writeBuffer() as Buffer;
+  const buffer = await workbook.csv.writeBuffer();
+  return Buffer.from(buffer);
 }
 
 export const CsvConstants = {
