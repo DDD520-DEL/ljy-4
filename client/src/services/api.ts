@@ -824,9 +824,18 @@ export const searchApi = {
     api.get<any, SearchResponse>('/search', { params: { q: query } }),
 };
 
+export interface DashboardOverview {
+  totalPets: number;
+  breedingPets: number;
+  pendingGeneReports: number;
+  newPetsThisMonth: number;
+}
+
 export const dashboardApi = {
   getStats: () =>
     api.get<any, DashboardStats>('/dashboard/stats'),
+  getOverview: () =>
+    api.get<any, DashboardOverview>('/dashboard/overview'),
 };
 
 export const alertApi = {

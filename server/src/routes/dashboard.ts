@@ -5,6 +5,46 @@ import { aggregateDiseaseByPet } from '../utils/diseaseAggregation.js';
 
 const router = Router();
 
+router.get('/overview', async (req, res) => {
+  try {
+    const [
+      totalPets,
+      breedingPets,
+      pendingGeneReports,
+      newPetsThisMonth,
+    ] = await Promise.all([
+      prisma.pet.count({ where: { status: 'active' } }),
+      prisma.pet.count({ where: { status: 'active', isBreeding: true } }),
+      prisma.geneReport.count({ where: { status: 'pending' } }),
+      countNewPetsThisMonth(),
+    ]);
+
+    res.json({
+      totalPets,
+      breedingPets,
+      pendingGeneReports,
+      newPetsThisMonth,
+    });
+  } catch (error) {
+    console.error('获取概览统计失败:', error);
+    res.status(500).json({ error: '获取概览统计失败' });
+  }
+});
+
+async function countNewPetsThisMonth() {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  return prisma.pet.count({
+    where: {
+      status: 'active',
+      createdAt: {
+        gte: startOfMonth,
+      },
+    },
+  });
+}
+
 router.get('/stats', async (req, res) => {
   try {
     const [

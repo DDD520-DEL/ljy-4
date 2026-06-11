@@ -1,4 +1,5 @@
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import {
   PawPrint,
   Network,
@@ -8,10 +9,13 @@ import {
   Home,
   Activity,
   BookOpen,
+  TrendingUp,
+  FileClock,
 } from 'lucide-react';
 import SearchBar from './components/SearchBar';
 import AlertBanner from './components/AlertBanner';
 import ReminderSidebar from './components/ReminderSidebar';
+import { dashboardApi, DashboardOverview } from './services/api';
 
 import PetList from './pages/PetList';
 import PetDetail from './pages/PetDetail';
@@ -132,6 +136,30 @@ function App() {
 }
 
 function Dashboard() {
+  const [overview, setOverview] = useState<DashboardOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      try {
+        const data = await dashboardApi.getOverview();
+        setOverview(data);
+      } catch (error) {
+        console.error('获取概览统计失败:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOverview();
+  }, []);
+
+  const statCards = [
+    { title: '宠物总数', value: overview?.totalPets ?? 0, icon: PawPrint, color: 'blue' },
+    { title: '种畜数量', value: overview?.breedingPets ?? 0, icon: Settings, color: 'green' },
+    { title: '待解析报告', value: overview?.pendingGeneReports ?? 0, icon: FileClock, color: 'orange' },
+    { title: '本月新增', value: overview?.newPetsThisMonth ?? 0, icon: TrendingUp, color: 'purple' },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -142,10 +170,15 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="宠物总数" value="8" icon={PawPrint} color="blue" />
-        <StatCard title="种畜数量" value="5" icon={Settings} color="green" />
-        <StatCard title="遗传标记" value="14" icon={Dna} color="purple" />
-        <StatCard title="基因报告" value="3" icon={BarChart3} color="orange" />
+        {statCards.map((card, index) => (
+          <StatCard
+            key={index}
+            title={card.title}
+            value={loading ? '--' : String(card.value)}
+            icon={card.icon}
+            color={card.color}
+          />
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
