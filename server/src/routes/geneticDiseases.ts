@@ -142,11 +142,6 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const data = diseaseSchema.partial().parse(req.body);
 
-    const existing = await prisma.geneticDisease.findUnique({ where: { id } });
-    if (!existing) {
-      return res.status(404).json({ error: '遗传病不存在' });
-    }
-
     const updateData: any = { ...data };
     if (data.symptoms !== undefined) {
       updateData.symptoms = data.symptoms ? JSON.stringify(data.symptoms) : null;
@@ -172,6 +167,14 @@ router.put('/:id', async (req, res) => {
         .status(400)
         .json({ error: '数据验证失败', details: error.errors });
     }
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'P2025'
+    ) {
+      return res.status(404).json({ error: '遗传病不存在' });
+    }
     console.error('更新遗传病失败:', error);
     res.status(500).json({ error: '更新遗传病失败' });
   }
@@ -181,15 +184,18 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const existing = await prisma.geneticDisease.findUnique({ where: { id } });
-    if (!existing) {
-      return res.status(404).json({ error: '遗传病不存在' });
-    }
-
     await prisma.geneticDisease.delete({ where: { id } });
 
     res.json({ message: '删除成功' });
   } catch (error) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      error.code === 'P2025'
+    ) {
+      return res.status(404).json({ error: '遗传病不存在' });
+    }
     console.error('删除遗传病失败:', error);
     res.status(500).json({ error: '删除遗传病失败' });
   }

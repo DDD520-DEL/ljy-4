@@ -11,6 +11,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "test": "tsx tests/diseaseAggregation.test.ts",
+    "test:routes": "node tests/geneticDiseasesRoutes.test.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts"
