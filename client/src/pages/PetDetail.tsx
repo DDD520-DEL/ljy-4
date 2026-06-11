@@ -21,8 +21,9 @@ import {
   AlertCircle,
   Building2,
   FlaskConical,
+  Syringe,
 } from 'lucide-react';
-import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus } from '../services/api';
+import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord } from '../services/api';
 
 export default function PetDetail() {
   const { id } = useParams<{ id: string }>();
@@ -30,7 +31,7 @@ export default function PetDetail() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines'>('info');
   const [transfers, setTransfers] = useState<PetTransfer[]>([]);
   const [transfersLoading, setTransfersLoading] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -42,6 +43,17 @@ export default function PetDetail() {
     toOwnerName: '',
     toOwnerContact: '',
     transferDate: new Date().toISOString().split('T')[0],
+    notes: '',
+  });
+  const [vaccines, setVaccines] = useState<VaccineRecord[]>([]);
+  const [vaccinesLoading, setVaccinesLoading] = useState(false);
+  const [showVaccineForm, setShowVaccineForm] = useState(false);
+  const [editingVaccine, setEditingVaccine] = useState<VaccineRecord | null>(null);
+  const [vaccineForm, setVaccineForm] = useState({
+    vaccineName: '',
+    vaccinationDate: new Date().toISOString().split('T')[0],
+    expiryDate: '',
+    institution: '',
     notes: '',
   });
   const [appointments, setAppointments] = useState<GeneTestAppointment[]>([]);
@@ -80,6 +92,12 @@ export default function PetDetail() {
   useEffect(() => {
     if (id && activeTab === 'appointments') {
       loadAppointments();
+    }
+  }, [id, activeTab]);
+
+  useEffect(() => {
+    if (id && activeTab === 'vaccines') {
+      loadVaccines();
     }
   }, [id, activeTab]);
 
@@ -177,6 +195,74 @@ export default function PetDetail() {
       console.error('加载流转记录失败:', error);
     } finally {
       setTransfersLoading(false);
+    }
+  }
+
+  async function loadVaccines() {
+    if (!id) return;
+    setVaccinesLoading(true);
+    try {
+      const data = await petApi.listVaccines(id);
+      setVaccines(data);
+    } catch (error) {
+      console.error('加载疫苗接种记录失败:', error);
+    } finally {
+      setVaccinesLoading(false);
+    }
+  }
+
+  function resetVaccineForm() {
+    setVaccineForm({
+      vaccineName: '',
+      vaccinationDate: new Date().toISOString().split('T')[0],
+      expiryDate: '',
+      institution: '',
+      notes: '',
+    });
+    setEditingVaccine(null);
+    setShowVaccineForm(false);
+  }
+
+  function handleEditVaccine(vaccine: VaccineRecord) {
+    setEditingVaccine(vaccine);
+    setVaccineForm({
+      vaccineName: vaccine.vaccineName,
+      vaccinationDate: vaccine.vaccinationDate.split('T')[0],
+      expiryDate: vaccine.expiryDate ? vaccine.expiryDate.split('T')[0] : '',
+      institution: vaccine.institution || '',
+      notes: vaccine.notes || '',
+    });
+    setShowVaccineForm(true);
+  }
+
+  async function handleSubmitVaccine(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+
+    try {
+      if (editingVaccine) {
+        await petApi.updateVaccine(id, editingVaccine.id, vaccineForm);
+      } else {
+        await petApi.createVaccine(id, vaccineForm);
+      }
+      resetVaccineForm();
+      loadVaccines();
+    } catch (error) {
+      console.error('保存疫苗接种记录失败:', error);
+      alert('保存失败，请重试');
+    }
+  }
+
+  async function handleDeleteVaccine(vaccineId: string) {
+    if (!id) return;
+    if (!confirm('确定要删除这条疫苗接种记录吗？')) return;
+
+    try {
+      await petApi.removeVaccine(id, vaccineId);
+      loadVaccines();
+    } catch (error) {
+      console.error('删除疫苗接种记录失败:', error);
+      alert('删除失败，请重试');
     }
   }
 
@@ -365,6 +451,30 @@ export default function PetDetail() {
     }
   };
 
+  const getVaccineExpiryStatus = (expiryDate: string | null): { status: 'expired' | 'urgent' | 'warning' | 'normal' | 'none'; daysLeft: number | null } => {
+    if (!expiryDate) return { status: 'none', daysLeft: null };
+    const now = new Date();
+    const expiry = new Date(expiryDate);
+    const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysLeft < 0) return { status: 'expired', daysLeft };
+    if (daysLeft <= 7) return { status: 'urgent', daysLeft };
+    if (daysLeft <= 30) return { status: 'warning', daysLeft };
+    return { status: 'normal', daysLeft };
+  };
+
+  const getVaccineRowClass = (status: string) => {
+    switch (status) {
+      case 'expired':
+        return 'bg-red-50 hover:bg-red-100';
+      case 'urgent':
+        return 'bg-orange-50 hover:bg-orange-100';
+      case 'warning':
+        return 'bg-yellow-50 hover:bg-yellow-100';
+      default:
+        return 'hover:bg-gray-50';
+    }
+  };
+
   if (loading) {
     return <div className="text-center py-12 text-gray-500">加载中...</div>;
   }
@@ -419,6 +529,7 @@ export default function PetDetail() {
                 { key: 'reports', label: '基因报告', icon: FileText },
                 { key: 'appointments', label: '检测预约', icon: FlaskConical },
                 { key: 'transfers', label: '流转记录', icon: Repeat },
+                { key: 'vaccines', label: '疫苗接种', icon: Syringe },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
@@ -1218,6 +1329,252 @@ export default function PetDetail() {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'vaccines' && (
+                <div>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">疫苗接种记录</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        <span className="inline-flex items-center gap-1 mr-3"><span className="w-3 h-3 bg-red-100 border border-red-300 rounded"></span>已过期</span>
+                        <span className="inline-flex items-center gap-1 mr-3"><span className="w-3 h-3 bg-orange-100 border border-orange-300 rounded"></span>7天内到期</span>
+                        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 bg-yellow-100 border border-yellow-300 rounded"></span>30天内到期</span>
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        resetVaccineForm();
+                        setShowVaccineForm(true);
+                      }}
+                      className="flex items-center gap-1 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                      添加记录
+                    </button>
+                  </div>
+
+                  {showVaccineForm && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-medium text-gray-900">
+                          {editingVaccine ? '编辑疫苗接种记录' : '添加疫苗接种记录'}
+                        </h4>
+                        <button
+                          onClick={resetVaccineForm}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSubmitVaccine} className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              疫苗名称 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Syringe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="text"
+                                required
+                                value={vaccineForm.vaccineName}
+                                onChange={(e) => setVaccineForm({ ...vaccineForm, vaccineName: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                placeholder="如：狂犬疫苗、六联疫苗等"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              接种机构
+                            </label>
+                            <div className="relative">
+                              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="text"
+                                value={vaccineForm.institution}
+                                onChange={(e) => setVaccineForm({ ...vaccineForm, institution: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                                placeholder="如：XX宠物医院"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              接种日期 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="date"
+                                required
+                                value={vaccineForm.vaccinationDate}
+                                onChange={(e) => setVaccineForm({ ...vaccineForm, vaccinationDate: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              有效期至
+                            </label>
+                            <div className="relative">
+                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="date"
+                                value={vaccineForm.expiryDate}
+                                onChange={(e) => setVaccineForm({ ...vaccineForm, expiryDate: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            备注
+                          </label>
+                          <textarea
+                            rows={2}
+                            value={vaccineForm.notes}
+                            onChange={(e) => setVaccineForm({ ...vaccineForm, notes: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                            placeholder="接种反应、疫苗批号等..."
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={resetVaccineForm}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                          >
+                            取消
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                          >
+                            {editingVaccine ? '保存修改' : '添加记录'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {vaccinesLoading ? (
+                    <div className="text-center py-8 text-gray-500">加载中...</div>
+                  ) : vaccines.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Syringe className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">暂无疫苗接种记录</p>
+                      <p className="text-sm text-gray-400 mt-1">点击上方按钮添加第一条记录</p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-200">
+                            <th className="text-left py-3 px-3 font-medium text-gray-600">疫苗名称</th>
+                            <th className="text-left py-3 px-3 font-medium text-gray-600">接种日期</th>
+                            <th className="text-left py-3 px-3 font-medium text-gray-600">有效期至</th>
+                            <th className="text-left py-3 px-3 font-medium text-gray-600">接种机构</th>
+                            <th className="text-left py-3 px-3 font-medium text-gray-600">状态</th>
+                            <th className="text-right py-3 px-3 font-medium text-gray-600">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vaccines.map((vaccine) => {
+                            const expiryInfo = getVaccineExpiryStatus(vaccine.expiryDate);
+                            return (
+                              <tr
+                                key={vaccine.id}
+                                className={`border-b border-gray-100 transition-colors ${getVaccineRowClass(expiryInfo.status)}`}
+                              >
+                                <td className="py-3 px-3">
+                                  <div className="font-medium text-gray-900">{vaccine.vaccineName}</div>
+                                  {vaccine.notes && (
+                                    <div className="text-xs text-gray-500 mt-0.5 truncate max-w-[180px]" title={vaccine.notes}>
+                                      备注：{vaccine.notes}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="py-3 px-3 text-gray-700">
+                                  {new Date(vaccine.vaccinationDate).toLocaleDateString('zh-CN')}
+                                </td>
+                                <td className="py-3 px-3 text-gray-700">
+                                  {vaccine.expiryDate
+                                    ? new Date(vaccine.expiryDate).toLocaleDateString('zh-CN')
+                                    : <span className="text-gray-400">-</span>
+                                  }
+                                </td>
+                                <td className="py-3 px-3 text-gray-700">
+                                  {vaccine.institution || <span className="text-gray-400">-</span>}
+                                </td>
+                                <td className="py-3 px-3">
+                                  {(() => {
+                                    if (expiryInfo.status === 'none') {
+                                      return <span className="text-gray-400 text-xs">长期有效</span>;
+                                    }
+                                    if (expiryInfo.status === 'expired') {
+                                      return (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 rounded text-xs font-medium">
+                                          <AlertCircle className="w-3 h-3" />
+                                          已过期 {Math.abs(expiryInfo.daysLeft!)}天
+                                        </span>
+                                      );
+                                    }
+                                    if (expiryInfo.status === 'urgent') {
+                                      return (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-orange-100 text-orange-700 rounded text-xs font-medium">
+                                          <AlertCircle className="w-3 h-3" />
+                                          剩余 {expiryInfo.daysLeft}天
+                                        </span>
+                                      );
+                                    }
+                                    if (expiryInfo.status === 'warning') {
+                                      return (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs font-medium">
+                                          <Clock className="w-3 h-3" />
+                                          剩余 {expiryInfo.daysLeft}天
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-medium">
+                                        <CheckCircle className="w-3 h-3" />
+                                        有效
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
+                                <td className="py-3 px-3">
+                                  <div className="flex justify-end gap-1">
+                                    <button
+                                      onClick={() => handleEditVaccine(vaccine)}
+                                      className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                                      title="编辑"
+                                    >
+                                      <Edit className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteVaccine(vaccine.id)}
+                                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                      title="删除"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>

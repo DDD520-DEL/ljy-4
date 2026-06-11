@@ -248,6 +248,18 @@ export interface PetTransfer {
   createdAt: string;
 }
 
+export interface VaccineRecord {
+  id: string;
+  petId: string;
+  vaccineName: string;
+  vaccinationDate: string;
+  expiryDate: string | null;
+  institution: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type TimelineEventType = 'weight' | 'gene' | 'breeding';
 
 export interface TimelineEvent {
@@ -544,6 +556,14 @@ export const petApi = {
     api.put<any, PetTransfer>(`/pets/${id}/transfers/${recordId}`, data),
   removeTransfer: (id: string, recordId: string) =>
     api.delete<any, { message: string }>(`/pets/${id}/transfers/${recordId}`),
+  listVaccines: (id: string) =>
+    api.get<any, VaccineRecord[]>(`/pets/${id}/vaccines`),
+  createVaccine: (id: string, data: Partial<VaccineRecord>) =>
+    api.post<any, VaccineRecord>(`/pets/${id}/vaccines`, data),
+  updateVaccine: (id: string, recordId: string, data: Partial<VaccineRecord>) =>
+    api.put<any, VaccineRecord>(`/pets/${id}/vaccines/${recordId}`, data),
+  removeVaccine: (id: string, recordId: string) =>
+    api.delete<any, { message: string }>(`/pets/${id}/vaccines/${recordId}`),
 };
 
 export const relationApi = {
