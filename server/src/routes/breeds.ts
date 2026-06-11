@@ -4,20 +4,21 @@ import prisma from '../lib/prisma.js';
 
 const router = Router();
 
-function parseJsonString(jsonStr: string | null): any {
+function parseJsonString(jsonStr: string | null, fieldName = 'unknown'): any {
   if (!jsonStr) return null;
   try {
     return JSON.parse(jsonStr);
-  } catch {
-    return jsonStr;
+  } catch (error) {
+    console.error(`[parseJsonString] 解析 JSON 失败 (字段: ${fieldName}):`, error, '原始值:', jsonStr);
+    return null;
   }
 }
 
 function transformBreed(breed: any): any {
   return {
     ...breed,
-    commonDiseases: parseJsonString(breed.commonDiseases),
-    carePoints: parseJsonString(breed.carePoints),
+    commonDiseases: parseJsonString(breed.commonDiseases, 'commonDiseases') ?? [],
+    carePoints: parseJsonString(breed.carePoints, 'carePoints') ?? [],
   };
 }
 

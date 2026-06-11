@@ -686,8 +686,6 @@ async function main() {
     }
   }
 
-  console.log('创建遗传疾病数据...');
-
   const geneticDiseasesData: Prisma.GeneticDiseaseCreateInput[] = [
     {
       name: '多药耐药性（MDR1缺陷）',

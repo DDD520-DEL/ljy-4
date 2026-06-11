@@ -4,21 +4,22 @@ import prisma from '../lib/prisma.js';
 
 const router = Router();
 
-function parseJsonString(jsonStr: string | null): any {
+function parseJsonString(jsonStr: string | null, fieldName = 'unknown'): any {
   if (!jsonStr) return null;
   try {
     return JSON.parse(jsonStr);
-  } catch {
-    return jsonStr;
+  } catch (error) {
+    console.error(`[parseJsonString] 解析 JSON 失败 (字段: ${fieldName}):`, error, '原始值:', jsonStr);
+    return null;
   }
 }
 
 function transformDisease(disease: any): any {
   return {
     ...disease,
-    symptoms: parseJsonString(disease.symptoms),
-    affectedBreeds: parseJsonString(disease.affectedBreeds),
-    references: parseJsonString(disease.references),
+    symptoms: parseJsonString(disease.symptoms, 'symptoms') ?? [],
+    affectedBreeds: parseJsonString(disease.affectedBreeds, 'affectedBreeds') ?? [],
+    references: parseJsonString(disease.references, 'references'),
   };
 }
 
@@ -141,6 +142,11 @@ router.put('/:id', async (req, res) => {
     const { id } = req.params;
     const data = diseaseSchema.partial().parse(req.body);
 
+    const existing = await prisma.geneticDisease.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: '遗传病不存在' });
+    }
+
     const updateData: any = { ...data };
     if (data.symptoms !== undefined) {
       updateData.symptoms = data.symptoms ? JSON.stringify(data.symptoms) : null;
@@ -174,6 +180,11 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params;
+
+    const existing = await prisma.geneticDisease.findUnique({ where: { id } });
+    if (!existing) {
+      return res.status(404).json({ error: '遗传病不存在' });
+    }
 
     await prisma.geneticDisease.delete({ where: { id } });
 
