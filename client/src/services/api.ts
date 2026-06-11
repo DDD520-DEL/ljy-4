@@ -13,6 +13,50 @@ api.interceptors.response.use(
   }
 );
 
+export interface PetCompareMarker {
+  id: string;
+  markerId: string;
+  markerName: string;
+  geneName: string;
+  disease: string;
+  inheritance: string;
+  riskLevel: string;
+  genotype: string;
+  allele1: string | null;
+  allele2: string | null;
+  zygosity: string | null;
+  source: string | null;
+  testedAt: string | null;
+}
+
+export interface PetCompareData {
+  id: string;
+  name: string;
+  species: string;
+  breed: string | null;
+  gender: string;
+  birthDate: string | null;
+  color: string | null;
+  weight: number | null;
+  description: string | null;
+  avatarUrl: string | null;
+  isBreeding: boolean;
+  status: string;
+  geneMarkers: PetCompareMarker[];
+  inbreedingCoefficient: number;
+  inbreedingRiskLevel: string;
+  inbreedingInterpretation: string;
+  parentNames: {
+    father: string | null;
+    mother: string | null;
+  };
+}
+
+export interface PetCompareResponse {
+  pet1: PetCompareData;
+  pet2: PetCompareData;
+}
+
 export interface Pet {
   id: string;
   name: string;
@@ -631,6 +675,8 @@ export interface TodayRemindersResponse {
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
+  compare: (pet1Id: string, pet2Id: string) =>
+    api.get<any, PetCompareResponse>('/pets/compare', { params: { pet1Id, pet2Id } }),
   create: (data: Partial<Pet>) => api.post<any, Pet>('/pets', data),
   update: (id: string, data: Partial<Pet>) => api.put<any, Pet>(`/pets/${id}`, data),
   remove: (id: string) => api.delete<any, { message: string }>(`/pets/${id}`),

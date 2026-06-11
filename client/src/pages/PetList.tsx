@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock } from 'lucide-react';
-import { petApi, Pet, alertApi, BreedingAlert } from '../services/api';
+import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock, GitCompareArrows, X } from 'lucide-react';
+import { petApi, Pet, alertApi, BreedingAlert, PetCompareData } from '../services/api';
 import { PetAlertSummary } from '../components/AlertBadge';
+import PetComparePanel from '../components/PetComparePanel';
 
 export default function PetList() {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -10,6 +11,9 @@ export default function PetList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [alerts, setAlerts] = useState<BreedingAlert[]>([]);
   const [affectedPetIds, setAffectedPetIds] = useState<string[]>([]);
+  const [selectedPetIds, setSelectedPetIds] = useState<string[]>([]);
+  const [compareData, setCompareData] = useState<{ pet1: PetCompareData; pet2: PetCompareData } | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
 
   const [filters, setFilters] = useState({
     species: searchParams.get('species') || 'all',
@@ -53,10 +57,41 @@ export default function PetList() {
 
     try {
       await petApi.remove(id);
+      setSelectedPetIds((prev) => prev.filter((pid) => pid !== id));
       loadPets();
     } catch (error) {
       alert('删除失败');
     }
+  }
+
+  function toggleSelect(petId: string) {
+    setSelectedPetIds((prev) => {
+      if (prev.includes(petId)) {
+        return prev.filter((id) => id !== petId);
+      }
+      if (prev.length >= 2) {
+        return [prev[1], petId];
+      }
+      return [...prev, petId];
+    });
+  }
+
+  async function handleCompare() {
+    if (selectedPetIds.length !== 2) return;
+    setCompareLoading(true);
+    try {
+      const data = await petApi.compare(selectedPetIds[0], selectedPetIds[1]);
+      setCompareData(data);
+    } catch (error) {
+      console.error('对比失败:', error);
+      alert('加载对比数据失败，请重试');
+    } finally {
+      setCompareLoading(false);
+    }
+  }
+
+  function handleCloseCompare() {
+    setCompareData(null);
   }
 
   const speciesOptions = [
@@ -96,13 +131,39 @@ export default function PetList() {
           <h1 className="text-2xl font-bold text-gray-900">宠物管理</h1>
           <p className="text-gray-600 mt-1">管理所有宠物的基本信息和谱系关系</p>
         </div>
-        <Link
-          to="/pets/new"
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
-        >
-          <Plus className="w-5 h-5" />
-          添加宠物
-        </Link>
+        <div className="flex items-center gap-3">
+          {selectedPetIds.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">
+                已选 {selectedPetIds.length}/2
+              </span>
+              <button
+                onClick={() => setSelectedPetIds([])}
+                className="text-sm text-gray-400 hover:text-gray-600 transition-colors"
+                title="清除选择"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+          {selectedPetIds.length === 2 && (
+            <button
+              onClick={handleCompare}
+              disabled={compareLoading}
+              className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <GitCompareArrows className="w-5 h-5" />
+              {compareLoading ? '加载中...' : '对比'}
+            </button>
+          )}
+          <Link
+            to="/pets/new"
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            添加宠物
+          </Link>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
@@ -170,94 +231,135 @@ export default function PetList() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {pets.map((pet) => (
-            <div
-              key={pet.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
-            >
-              <div className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-full flex items-center justify-center">
-                      <span className="text-2xl">
-                        {pet.species === 'dog' ? '🐕' : pet.species === 'cat' ? '🐱' : '🐾'}
-                      </span>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <h3 className="font-semibold text-gray-900">{pet.name}</h3>
-                        <PetAlertSummary
-                          petId={pet.id}
-                          affectedPetIds={affectedPetIds}
-                          allAlerts={alerts}
-                        />
+          {pets.map((pet) => {
+            const isSelected = selectedPetIds.includes(pet.id);
+            const selectedIndex = selectedPetIds.indexOf(pet.id);
+
+            return (
+              <div
+                key={pet.id}
+                className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden hover:shadow-md transition-all ${
+                  isSelected
+                    ? 'border-primary-400 ring-2 ring-primary-100'
+                    : 'border-gray-200'
+                }`}
+              >
+                <div className="p-5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-secondary-100 rounded-full flex items-center justify-center">
+                          <span className="text-2xl">
+                            {pet.species === 'dog' ? '🐕' : pet.species === 'cat' ? '🐱' : '🐾'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => toggleSelect(pet.id)}
+                          className={`absolute -top-1 -left-1 w-5 h-5 rounded-full border-2 flex items-center justify-center text-xs font-bold transition-all ${
+                            isSelected
+                              ? 'bg-primary-600 border-primary-600 text-white'
+                              : 'bg-white border-gray-300 text-transparent hover:border-primary-400'
+                          }`}
+                          title={isSelected ? '取消选择' : '选择对比'}
+                        >
+                          {isSelected ? selectedIndex + 1 : ''}
+                        </button>
                       </div>
-                      <p className="text-sm text-gray-500">{pet.breed || '未知品种'}</p>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <h3 className="font-semibold text-gray-900">{pet.name}</h3>
+                          <PetAlertSummary
+                            petId={pet.id}
+                            affectedPetIds={affectedPetIds}
+                            allAlerts={alerts}
+                          />
+                        </div>
+                        <p className="text-sm text-gray-500">{pet.breed || '未知品种'}</p>
+                      </div>
                     </div>
+                    <span
+                      className={`text-xs px-2 py-1 rounded-full font-medium ${getGenderColor(
+                        pet.gender
+                      )}`}
+                    >
+                      {getGenderLabel(pet.gender)}
+                    </span>
                   </div>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full font-medium ${getGenderColor(
-                      pet.gender
-                    )}`}
-                  >
-                    {getGenderLabel(pet.gender)}
-                  </span>
-                </div>
 
-                <div className="mt-4 space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <span className="text-gray-400">物种：</span>
-                    <span>{getSpeciesLabel(pet.species)}</span>
-                  </div>
-                  {pet.birthDate && (
+                  <div className="mt-4 space-y-2">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <span className="text-gray-400">生日：</span>
-                      <span>{new Date(pet.birthDate).toLocaleDateString()}</span>
+                      <span className="text-gray-400">物种：</span>
+                      <span>{getSpeciesLabel(pet.species)}</span>
                     </div>
-                  )}
-                  {pet.isBreeding && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                        种用
-                      </span>
-                    </div>
-                  )}
+                    {pet.birthDate && (
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <span className="text-gray-400">生日：</span>
+                        <span>{new Date(pet.birthDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {pet.isBreeding && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                          种用
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="border-t border-gray-100 px-5 py-3 bg-gray-50 flex justify-end gap-2">
+                  <button
+                    onClick={() => toggleSelect(pet.id)}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isSelected
+                        ? 'text-primary-600 bg-primary-50'
+                        : 'text-gray-500 hover:text-primary-600 hover:bg-primary-50'
+                    }`}
+                    title={isSelected ? '取消选择' : '选择对比'}
+                  >
+                    <GitCompareArrows className="w-4 h-4" />
+                  </button>
+                  <Link
+                    to={`/pets/${pet.id}/timeline`}
+                    className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                    title="健康时间轴"
+                  >
+                    <Clock className="w-4 h-4" />
+                  </Link>
+                  <Link
+                    to={`/pets/${pet.id}`}
+                    className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                    title="查看详情"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Link>
+                  <Link
+                    to={`/pets/${pet.id}/edit`}
+                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="编辑"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(pet.id)}
+                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="删除"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-
-              <div className="border-t border-gray-100 px-5 py-3 bg-gray-50 flex justify-end gap-2">
-                <Link
-                  to={`/pets/${pet.id}/timeline`}
-                  className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                  title="健康时间轴"
-                >
-                  <Clock className="w-4 h-4" />
-                </Link>
-                <Link
-                  to={`/pets/${pet.id}`}
-                  className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
-                  title="查看详情"
-                >
-                  <Eye className="w-4 h-4" />
-                </Link>
-                <Link
-                  to={`/pets/${pet.id}/edit`}
-                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="编辑"
-                >
-                  <Edit className="w-4 h-4" />
-                </Link>
-                <button
-                  onClick={() => handleDelete(pet.id)}
-                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                  title="删除"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
+      )}
+
+      {compareData && (
+        <PetComparePanel
+          pet1={compareData.pet1}
+          pet2={compareData.pet2}
+          onClose={handleCloseCompare}
+        />
       )}
     </div>
   );

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import prisma from '../lib/prisma.js';
+import { calculateInbreedingCoefficient } from '../utils/inbreeding.js';
 
 const router = Router();
 
@@ -67,6 +68,116 @@ const dailyLogSchema = z.object({
   content: z.string().min(1, '日志内容不能为空'),
   imageUrl: z.string().optional().nullable(),
   mood: z.enum(['happy', 'normal', 'unwell']),
+});
+
+router.get('/compare', async (req, res) => {
+  try {
+    const { pet1Id, pet2Id } = req.query;
+
+    if (!pet1Id || !pet2Id) {
+      return res.status(400).json({ error: '请提供 pet1Id 和 pet2Id 参数' });
+    }
+
+    const [pet1, pet2] = await Promise.all([
+      prisma.pet.findUnique({
+        where: { id: pet1Id as string },
+        include: {
+          geneMarkers: {
+            include: { marker: true },
+            orderBy: { marker: { disease: 'asc' } },
+          },
+          childRelations: { include: { parent: true } },
+        },
+      }),
+      prisma.pet.findUnique({
+        where: { id: pet2Id as string },
+        include: {
+          geneMarkers: {
+            include: { marker: true },
+            orderBy: { marker: { disease: 'asc' } },
+          },
+          childRelations: { include: { parent: true } },
+        },
+      }),
+    ]);
+
+    if (!pet1) {
+      return res.status(404).json({ error: `宠物 ${pet1Id} 不存在` });
+    }
+    if (!pet2) {
+      return res.status(404).json({ error: `宠物 ${pet2Id} 不存在` });
+    }
+
+    const [inbreeding1, inbreeding2] = await Promise.all([
+      calculateInbreedingCoefficient(pet1Id as string),
+      calculateInbreedingCoefficient(pet2Id as string),
+    ]);
+
+    function formatPet(pet: any, inbreedingCoeff: number) {
+      const markers = pet.geneMarkers.map((gm: any) => ({
+        id: gm.id,
+        markerId: gm.markerId,
+        markerName: gm.marker?.markerName ?? '',
+        geneName: gm.marker?.geneName ?? '',
+        disease: gm.marker?.disease ?? '',
+        inheritance: gm.marker?.inheritance ?? '',
+        riskLevel: gm.marker?.riskLevel ?? '',
+        genotype: gm.genotype,
+        allele1: gm.allele1,
+        allele2: gm.allele2,
+        zygosity: gm.zygosity,
+        source: gm.source,
+        testedAt: gm.testedAt,
+      }));
+
+      return {
+        id: pet.id,
+        name: pet.name,
+        species: pet.species,
+        breed: pet.breed,
+        gender: pet.gender,
+        birthDate: pet.birthDate,
+        color: pet.color,
+        weight: pet.weight,
+        description: pet.description,
+        avatarUrl: pet.avatarUrl,
+        isBreeding: pet.isBreeding,
+        status: pet.status,
+        geneMarkers: markers,
+        inbreedingCoefficient: inbreedingCoeff,
+        inbreedingRiskLevel: getInbreedingRiskLevel(inbreedingCoeff),
+        inbreedingInterpretation: getInbreedingInterpretation(inbreedingCoeff),
+        parentNames: {
+          father: pet.childRelations?.find((r: any) => r.relationType === 'father')?.parent?.name ?? null,
+          mother: pet.childRelations?.find((r: any) => r.relationType === 'mother')?.parent?.name ?? null,
+        },
+      };
+    }
+
+    function getInbreedingRiskLevel(coeff: number): string {
+      if (coeff > 0.25) return 'very_high';
+      if (coeff > 0.125) return 'high';
+      if (coeff > 0.0625) return 'medium';
+      return 'low';
+    }
+
+    function getInbreedingInterpretation(coeff: number): string {
+      if (coeff === 0) return '无亲缘关系';
+      if (coeff <= 0.03125) return '远亲关系，风险较低';
+      if (coeff <= 0.0625) return '表亲级关系，需谨慎';
+      if (coeff <= 0.125) return '半同胞/叔侄级，风险中等';
+      if (coeff <= 0.25) return '全同胞/亲子级，风险高';
+      return '极高风险，严禁繁殖';
+    }
+
+    res.json({
+      pet1: formatPet(pet1, inbreeding1),
+      pet2: formatPet(pet2, inbreeding2),
+    });
+  } catch (error) {
+    console.error('宠物对比失败:', error);
+    res.status(500).json({ error: '宠物对比失败' });
+  }
 });
 
 router.get('/', async (req, res) => {
