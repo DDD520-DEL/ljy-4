@@ -33,6 +33,8 @@ import {
   Image,
   ChevronLeft,
   ChevronRight,
+  Bell,
+  Edit3,
 } from 'lucide-react';
 import {
   LineChart,
@@ -45,7 +47,7 @@ import {
   ResponsiveContainer,
   ReferenceArea,
 } from 'recharts';
-import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord, WeightRecord, BreedWeightStandard, PetDailyLog, PetDailyLogMood, PetDailyLogListResponse } from '../services/api';
+import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord, WeightRecord, BreedWeightStandard, PetDailyLog, PetDailyLogMood, PetDailyLogListResponse, reminderApi, Reminder } from '../services/api';
 
 export default function PetDetail() {
   const { id } = useParams<{ id: string }>();
@@ -53,7 +55,7 @@ export default function PetDetail() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines' | 'weight' | 'dailyLogs'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines' | 'weight' | 'dailyLogs' | 'reminders'>('info');
   const [weights, setWeights] = useState<WeightRecord[]>([]);
   const [weightsLoading, setWeightsLoading] = useState(false);
   const [showWeightForm, setShowWeightForm] = useState(false);
@@ -114,6 +116,18 @@ export default function PetDetail() {
     mood: 'normal' as PetDailyLogMood,
   });
 
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [remindersLoading, setRemindersLoading] = useState(false);
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [reminderForm, setReminderForm] = useState({
+    title: '',
+    remindDate: '',
+    remindTime: '09:00',
+    notes: '',
+  });
+  const [reminderActionIds, setReminderActionIds] = useState<Set<string>>(new Set());
+
   const DEFAULT_TEST_ITEMS = [
     '常规遗传病筛查',
     '品种特异性检测',
@@ -160,6 +174,134 @@ export default function PetDetail() {
       loadDailyLogs(dailyLogsPage);
     }
   }, [id, activeTab, dailyLogsPage]);
+
+  useEffect(() => {
+    if (id && activeTab === 'reminders') {
+      loadReminders();
+    }
+  }, [id, activeTab]);
+
+  async function loadReminders() {
+    if (!id) return;
+    setRemindersLoading(true);
+    try {
+      const data = await reminderApi.list({ petId: id });
+      setReminders(data);
+    } catch (error) {
+      console.error('加载提醒列表失败:', error);
+    } finally {
+      setRemindersLoading(false);
+    }
+  }
+
+  function resetReminderForm() {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const offset = tomorrow.getTimezoneOffset();
+    const localTomorrow = new Date(tomorrow.getTime() - offset * 60 * 1000);
+    setReminderForm({
+      title: '',
+      remindDate: localTomorrow.toISOString().split('T')[0],
+      remindTime: '09:00',
+      notes: '',
+    });
+    setEditingReminder(null);
+    setShowReminderForm(false);
+  }
+
+  function handleEditReminder(reminder: Reminder) {
+    setEditingReminder(reminder);
+    const dt = new Date(reminder.remindAt);
+    const offset = dt.getTimezoneOffset();
+    const localDT = new Date(dt.getTime() - offset * 60 * 1000);
+    setReminderForm({
+      title: reminder.title,
+      remindDate: localDT.toISOString().split('T')[0],
+      remindTime: localDT.toTimeString().slice(0, 5),
+      notes: reminder.notes || '',
+    });
+    setShowReminderForm(true);
+  }
+
+  async function handleSubmitReminder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+
+    if (!reminderForm.title.trim()) {
+      alert('请输入提醒标题');
+      return;
+    }
+    if (!reminderForm.remindDate) {
+      alert('请选择提醒日期');
+      return;
+    }
+
+    const remindAt = new Date(`${reminderForm.remindDate}T${reminderForm.remindTime}`).toISOString();
+    setReminderActionIds((prev) => new Set(prev).add(editingReminder?.id || 'new'));
+    try {
+      if (editingReminder) {
+        await reminderApi.update(editingReminder.id, {
+          title: reminderForm.title.trim(),
+          remindAt,
+          notes: reminderForm.notes.trim() || null,
+        });
+      } else {
+        await reminderApi.create({
+          petId: id,
+          title: reminderForm.title.trim(),
+          remindAt,
+          notes: reminderForm.notes.trim() || null,
+        });
+      }
+      resetReminderForm();
+      loadReminders();
+    } catch (error) {
+      console.error('保存提醒失败:', error);
+      alert('保存失败，请重试');
+    } finally {
+      setReminderActionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(editingReminder?.id || 'new');
+        return next;
+      });
+    }
+  }
+
+  async function handleDeleteReminder(reminderId: string) {
+    if (!confirm('确定要删除这条提醒吗？')) return;
+    setReminderActionIds((prev) => new Set(prev).add(reminderId));
+    try {
+      await reminderApi.remove(reminderId);
+      loadReminders();
+    } catch (error) {
+      console.error('删除提醒失败:', error);
+      alert('删除失败，请重试');
+    } finally {
+      setReminderActionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reminderId);
+        return next;
+      });
+    }
+  }
+
+  async function handleToggleReminderComplete(reminder: Reminder) {
+    setReminderActionIds((prev) => new Set(prev).add(reminder.id));
+    try {
+      const updated = await reminderApi.toggleComplete(reminder.id);
+      setReminders((prev) =>
+        prev.map((r) => (r.id === reminder.id ? updated : r))
+      );
+    } catch (error) {
+      console.error('切换提醒状态失败:', error);
+    } finally {
+      setReminderActionIds((prev) => {
+        const next = new Set(prev);
+        next.delete(reminder.id);
+        return next;
+      });
+    }
+  }
 
   async function loadWeights() {
     if (!id) return;
@@ -773,6 +915,7 @@ export default function PetDetail() {
                 { key: 'appointments', label: '检测预约', icon: FlaskConical },
                 { key: 'transfers', label: '流转记录', icon: Repeat },
                 { key: 'vaccines', label: '疫苗接种', icon: Syringe },
+                { key: 'reminders', label: '提醒事项', icon: Bell },
               ].map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
@@ -2067,6 +2210,229 @@ export default function PetDetail() {
                           })}
                         </tbody>
                       </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'reminders' && (
+                <div>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">宠物提醒事项</h3>
+                      <p className="text-xs text-gray-500 mt-1">
+                        共 {reminders.length} 条提醒，其中待完成 {reminders.filter(r => !r.isCompleted).length} 条
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        resetReminderForm();
+                        setShowReminderForm(true);
+                      }}
+                      className="flex items-center gap-1 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                      新建提醒
+                    </button>
+                  </div>
+
+                  {showReminderForm && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-medium text-gray-900">
+                          {editingReminder ? '编辑提醒' : '新建提醒'}
+                        </h4>
+                        <button
+                          onClick={resetReminderForm}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSubmitReminder} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            提醒标题 <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={100}
+                            value={reminderForm.title}
+                            onChange={(e) => setReminderForm({ ...reminderForm, title: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                            placeholder="例如：接种狂犬疫苗、体内外驱虫、体检等"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              提醒日期 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="date"
+                                required
+                                value={reminderForm.remindDate}
+                                onChange={(e) => setReminderForm({ ...reminderForm, remindDate: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              提醒时间 <span className="text-red-500">*</span>
+                            </label>
+                            <div className="relative">
+                              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                              <input
+                                type="time"
+                                required
+                                value={reminderForm.remindTime}
+                                onChange={(e) => setReminderForm({ ...reminderForm, remindTime: e.target.value })}
+                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            备注说明
+                          </label>
+                          <textarea
+                            rows={2}
+                            maxLength={500}
+                            value={reminderForm.notes}
+                            onChange={(e) => setReminderForm({ ...reminderForm, notes: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                            placeholder="可选：添加具体的备注信息..."
+                          />
+                          <p className="text-xs text-gray-400 mt-1 text-right">
+                            {reminderForm.notes.length}/500
+                          </p>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={resetReminderForm}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                          >
+                            取消
+                          </button>
+                          <button
+                            type="submit"
+                            disabled={reminderActionIds.has(editingReminder?.id || 'new')}
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50"
+                          >
+                            {reminderActionIds.has(editingReminder?.id || 'new') ? '保存中...' : (editingReminder ? '保存修改' : '创建提醒')}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {remindersLoading ? (
+                    <div className="text-center py-8 text-gray-500">加载中...</div>
+                  ) : reminders.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">暂无提醒事项</p>
+                      <p className="text-sm text-gray-400 mt-1">点击上方按钮创建第一个提醒</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {reminders.map((reminder) => {
+                        const isOverdue = !reminder.isCompleted && new Date(reminder.remindAt) < new Date(new Date().setHours(0, 0, 0, 0));
+                        const isActionLoading = reminderActionIds.has(reminder.id);
+                        return (
+                          <div
+                            key={reminder.id}
+                            className={`border rounded-xl p-4 transition-all ${
+                              reminder.isCompleted
+                                ? 'bg-gray-50/50 border-gray-200 opacity-70'
+                                : isOverdue
+                                ? 'bg-red-50/50 border-red-200 hover:shadow-sm'
+                                : 'bg-white border-gray-200 hover:shadow-sm'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              <button
+                                onClick={() => handleToggleReminderComplete(reminder)}
+                                disabled={isActionLoading}
+                                className={`mt-0.5 w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                                  reminder.isCompleted
+                                    ? 'bg-green-500 border-green-500'
+                                    : isOverdue
+                                    ? 'border-red-400 hover:bg-red-500 hover:border-red-500'
+                                    : 'border-amber-400 hover:bg-amber-500 hover:border-amber-500'
+                                } disabled:opacity-50`}
+                                title={reminder.isCompleted ? '标记为未完成' : '标记完成'}
+                              >
+                                {reminder.isCompleted && <CheckCircle className="w-4 h-4 text-white" />}
+                              </button>
+
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm font-medium leading-snug ${reminder.isCompleted ? 'line-through text-gray-500' : 'text-gray-900'}`}>
+                                  {reminder.title}
+                                </p>
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  <span className={`text-xs font-medium flex items-center gap-1 ${
+                                    reminder.isCompleted
+                                      ? 'text-gray-400'
+                                      : isOverdue
+                                      ? 'text-red-600'
+                                      : 'text-amber-600'
+                                  }`}>
+                                    <Calendar className="w-3 h-3" />
+                                    {new Date(reminder.remindAt).toLocaleString('zh-CN', {
+                                      year: 'numeric',
+                                      month: '2-digit',
+                                      day: '2-digit',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                    {isOverdue && !reminder.isCompleted && ' (已过期)'}
+                                  </span>
+                                  {reminder.isCompleted && (
+                                    <span className="text-xs text-green-600 flex items-center gap-1 font-medium">
+                                      <CheckCircle className="w-3 h-3" />
+                                      已完成
+                                    </span>
+                                  )}
+                                </div>
+                                {reminder.notes && (
+                                  <p className={`text-xs mt-2 ${reminder.isCompleted ? 'text-gray-400' : 'text-gray-500'}`}>
+                                    💬 {reminder.notes}
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  创建于 {new Date(reminder.createdAt).toLocaleDateString('zh-CN')}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button
+                                  onClick={() => handleEditReminder(reminder)}
+                                  disabled={isActionLoading}
+                                  className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-50"
+                                  title="编辑"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteReminder(reminder.id)}
+                                  disabled={isActionLoading}
+                                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                                  title="删除"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

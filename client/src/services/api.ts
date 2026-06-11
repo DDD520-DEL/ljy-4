@@ -584,6 +584,36 @@ export interface PetDailyLogListResponse {
   pagination: PetDailyLogPagination;
 }
 
+export interface ReminderPetInfo {
+  id: string;
+  name: string;
+  species: string;
+  breed: string | null;
+  avatarUrl: string | null;
+}
+
+export interface Reminder {
+  id: string;
+  petId: string;
+  title: string;
+  remindAt: string;
+  isCompleted: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  pet?: ReminderPetInfo;
+}
+
+export interface TodayRemindersResponse {
+  today: Reminder[];
+  upcoming: Reminder[];
+  stats: {
+    todayCount: number;
+    upcomingCount: number;
+    overdueCount: number;
+  };
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -858,6 +888,23 @@ export const breedApi = {
   create: (data: Partial<Breed>) => api.post<any, Breed>('/breeds', data),
   update: (id: string, data: Partial<Breed>) => api.put<any, Breed>(`/breeds/${id}`, data),
   remove: (id: string) => api.delete<any, { message: string }>(`/breeds/${id}`),
+};
+
+export const reminderApi = {
+  list: (params?: { petId?: string; isCompleted?: boolean; today?: boolean; includeCompleted?: boolean }) =>
+    api.get<any, Reminder[]>('/reminders', { params }),
+  getToday: () =>
+    api.get<any, TodayRemindersResponse>('/reminders/today'),
+  get: (id: string) =>
+    api.get<any, Reminder>(`/reminders/${id}`),
+  create: (data: { petId: string; title: string; remindAt: string; notes?: string | null }) =>
+    api.post<any, Reminder>('/reminders', data),
+  update: (id: string, data: Partial<{ petId: string; title: string; remindAt: string; notes: string | null; isCompleted: boolean }>) =>
+    api.put<any, Reminder>(`/reminders/${id}`, data),
+  toggleComplete: (id: string) =>
+    api.put<any, Reminder>(`/reminders/${id}/complete`),
+  remove: (id: string) =>
+    api.delete<any, { message: string }>(`/reminders/${id}`),
 };
 
 export default api;

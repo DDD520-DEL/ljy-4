@@ -39,6 +39,7 @@ model Pet {
   geneTestAppointments  GeneTestAppointment[]
   vaccineRecords        VaccineRecord[]
   dailyLogs             PetDailyLog[]
+  reminders             Reminder[]
 }
 
 model ParentRelation {
@@ -284,4 +285,21 @@ model Breed {
 
   @@unique([name, species])
   @@index([species])
+}
+
+model Reminder {
+  id          String   @id @default(uuid())
+  petId       String
+  title       String
+  remindAt    DateTime
+  isCompleted Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pet         Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([petId])
+  @@index([remindAt])
+  @@index([isCompleted])
 }

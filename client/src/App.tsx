@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import SearchBar from './components/SearchBar';
 import AlertBanner from './components/AlertBanner';
+import ReminderSidebar from './components/ReminderSidebar';
 
 import PetList from './pages/PetList';
 import PetDetail from './pages/PetDetail';
@@ -54,7 +55,7 @@ function App() {
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = item.exact
@@ -78,13 +79,16 @@ function App() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-gray-200">
-          <div className="bg-gradient-to-br from-primary-50 to-secondary-50 rounded-lg p-4">
-            <p className="text-sm font-medium text-gray-900">基因检测提示</p>
-            <p className="text-xs text-gray-600 mt-1">
-              上传基因检测报告，自动解析位点数据，评估遗传风险。
-            </p>
+        <div className="flex-shrink-0 max-h-[45vh] overflow-y-auto">
+          <div className="px-4 py-3">
+            <div className="bg-gradient-to-br from-primary-50 to-secondary-50 rounded-lg p-4">
+              <p className="text-sm font-medium text-gray-900">基因检测提示</p>
+              <p className="text-xs text-gray-600 mt-1">
+                上传基因检测报告，自动解析位点数据，评估遗传风险。
+              </p>
+            </div>
           </div>
+          <ReminderSidebar />
         </div>
       </aside>
 
