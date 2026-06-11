@@ -445,6 +445,57 @@ export interface DashboardStats {
   diseaseFrequencies: DiseaseFrequencyItem[];
 }
 
+export interface BreedingAlertDetails {
+  inbreedingCoefficient?: number;
+  threshold?: number;
+  markerId?: string;
+  markerName?: string;
+  geneName?: string;
+  disease?: string;
+  riskLevel?: string;
+  riskScore?: number;
+  genotype?: string;
+  explanation?: string;
+}
+
+export interface BreedingAlert {
+  id: string;
+  petId: string | null;
+  alertType: string;
+  severity: string;
+  title: string;
+  message: string;
+  details: BreedingAlertDetails | null;
+  isRead: boolean;
+  sourceId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  pet?: {
+    id: string;
+    name: string;
+    species: string;
+    breed: string | null;
+    gender: string;
+    avatarUrl: string | null;
+  } | null;
+}
+
+export interface UnreadAlertsResponse {
+  alerts: BreedingAlert[];
+  stats: {
+    total: number;
+    danger: number;
+    warning: number;
+    affectedPets: number;
+  };
+  affectedPetIds: string[];
+}
+
+export interface AlertsListResponse {
+  alerts: BreedingAlert[];
+  total: number;
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -632,6 +683,29 @@ export const searchApi = {
 export const dashboardApi = {
   getStats: () =>
     api.get<any, DashboardStats>('/dashboard/stats'),
+};
+
+export const alertApi = {
+  list: (params?: { isRead?: boolean; petId?: string; alertType?: string; limit?: number; offset?: number }) =>
+    api.get<any, AlertsListResponse>('/alerts', { params }),
+  getUnread: (petId?: string) =>
+    api.get<any, UnreadAlertsResponse>('/alerts/unread', { params: petId ? { petId } : undefined }),
+  get: (id: string) =>
+    api.get<any, BreedingAlert>(`/alerts/${id}`),
+  markAsRead: (id: string) =>
+    api.put<any, BreedingAlert>(`/alerts/${id}/read`),
+  markBatchAsRead: (ids: string[]) =>
+    api.put<any, { message: string; markedCount: number }>('/alerts/read/batch', { ids }),
+  markAllAsRead: () =>
+    api.put<any, { message: string; markedCount: number }>('/alerts/read-all'),
+  runScan: () =>
+    api.post<any, { message: string; inbreedingAlerts: number; geneticAlerts: number; total: number }>('/alerts/scan'),
+  scanPet: (petId: string) =>
+    api.post<any, { message: string; petId: string; petName: string; inbreedingAlerts: number; geneticAlerts: number; total: number }>(`/alerts/scan-pet/${petId}`),
+  remove: (id: string) =>
+    api.delete<any, { message: string }>(`/alerts/${id}`),
+  clearRead: () =>
+    api.delete<any, { message: string; deletedCount: number }>('/alerts/clear/read'),
 };
 
 export default api;

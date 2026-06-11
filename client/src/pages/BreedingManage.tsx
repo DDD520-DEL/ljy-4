@@ -23,7 +23,10 @@ import {
   BreedingPair,
   PairInbreedingResult,
   BreedingRecommendation,
+  alertApi,
+  BreedingAlert,
 } from '../services/api';
+import { PetAlertSummary } from '../components/AlertBadge';
 
 export default function BreedingManage() {
   const [breedingPets, setBreedingPets] = useState<Pet[]>([]);
@@ -36,6 +39,8 @@ export default function BreedingManage() {
   const [sortBy, setSortBy] = useState<'risk' | 'inbreeding' | 'genetic'>('risk');
   const [recSpeciesFilter, setRecSpeciesFilter] = useState('all');
   const [addingPairId, setAddingPairId] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<BreedingAlert[]>([]);
+  const [affectedPetIds, setAffectedPetIds] = useState<string[]>([]);
 
   const [maleId, setMaleId] = useState('');
   const [femaleId, setFemaleId] = useState('');
@@ -52,12 +57,15 @@ export default function BreedingManage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [pets, pairs] = await Promise.all([
+      const [pets, pairs, alertData] = await Promise.all([
         breedingApi.listBreedingPets(),
         breedingApi.listPairs(),
+        alertApi.getUnread(),
       ]);
       setBreedingPets(pets);
       setBreedingPairs(pairs);
+      setAlerts(alertData.alerts);
+      setAffectedPetIds(alertData.affectedPetIds);
     } catch (error) {
       console.error('加载数据失败:', error);
     } finally {
@@ -325,16 +333,23 @@ export default function BreedingManage() {
                               : '🐾'}
                           </span>
                         </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">
-                            {pet.name}
-                          </h3>
-                          <p className="text-sm text-gray-500">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <h3 className="font-semibold text-gray-900 truncate">
+                              {pet.name}
+                            </h3>
+                            <PetAlertSummary
+                              petId={pet.id}
+                              affectedPetIds={affectedPetIds}
+                              allAlerts={alerts}
+                            />
+                          </div>
+                          <p className="text-sm text-gray-500 truncate">
                             {pet.breed || '未知品种'}
                           </p>
                         </div>
                         <span
-                          className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          className={`text-xs px-2 py-1 rounded-full font-medium flex-shrink-0 ${
                             pet.gender === 'male'
                               ? 'bg-blue-50 text-blue-600'
                               : 'bg-pink-50 text-pink-600'
@@ -344,9 +359,29 @@ export default function BreedingManage() {
                         </span>
                       </div>
                       <div className="mt-3 pt-3 border-t border-gray-100">
-                        <div className="flex items-center gap-1 text-xs text-gray-500">
-                          <Settings className="w-3.5 h-3.5" />
-                          <span>种用个体</span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1 text-xs text-gray-500">
+                            <Settings className="w-3.5 h-3.5" />
+                            <span>种用个体</span>
+                          </div>
+                          {(() => {
+                            const petAlerts = alerts.filter((a) => a.petId === pet.id);
+                            if (petAlerts.length === 0) return null;
+                            const dangerCount = petAlerts.filter((a) => a.severity === 'danger').length;
+                            return (
+                              <div className="text-xs">
+                                {dangerCount > 0 ? (
+                                  <span className="text-red-600 font-medium">
+                                    {dangerCount} 严重
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-600 font-medium">
+                                    {petAlerts.length} 警告
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>

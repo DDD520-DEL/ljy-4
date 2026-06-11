@@ -35,6 +35,7 @@ model Pet {
   weightRecords         WeightRecord[]
   puppyRecords          PuppyRecord[]
   transferRecords       PetTransfer[]
+  breedingAlerts        BreedingAlert[]
 }
 
 model ParentRelation {
@@ -187,4 +188,24 @@ model PetTransfer {
   createdAt       DateTime @default(now())
 
   pet             Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+}
+
+model BreedingAlert {
+  id          String   @id @default(uuid())
+  petId       String?
+  alertType   String   // inbreeding_threshold, genetic_high_risk
+  severity    String   // warning, danger
+  title       String
+  message     String
+  details     String?  // JSON string
+  isRead      Boolean  @default(false)
+  sourceId    String?  // 关联的源ID，如markerId或breedingPairId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pet         Pet?     @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([isRead])
+  @@index([petId])
+  @@index([alertType])
 }

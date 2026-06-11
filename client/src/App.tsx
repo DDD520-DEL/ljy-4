@@ -9,6 +9,7 @@ import {
   Activity,
 } from 'lucide-react';
 import SearchBar from './components/SearchBar';
+import AlertBanner from './components/AlertBanner';
 
 import PetList from './pages/PetList';
 import PetDetail from './pages/PetDetail';
@@ -85,6 +86,7 @@ function App() {
       </aside>
 
       <main className="flex-1 overflow-auto flex flex-col">
+        <AlertBanner />
         <header className="bg-white border-b border-gray-200 px-8 py-4">
           <div className="flex items-center justify-between">
             <div>

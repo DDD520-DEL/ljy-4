@@ -10,6 +10,8 @@ import geneticsRouter from './routes/genetics.js';
 import breedingRouter from './routes/breeding.js';
 import searchRouter from './routes/search.js';
 import dashboardRouter from './routes/dashboard.js';
+import alertsRouter from './routes/alerts.js';
+import { runFullAlertScan } from './utils/breedingAlerts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -34,6 +36,7 @@ app.use('/api/genetics', geneticsRouter);
 app.use('/api/breeding', breedingRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use('/api/alerts', alertsRouter);
 
 app.use((req, res) => {
   res.status(404).json({ error: '接口不存在' });
@@ -44,9 +47,22 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   res.status(500).json({ error: '服务器内部错误', message: err.message });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
   console.log(`📋 API 健康检查: http://localhost:${PORT}/api/health`);
+
+  try {
+    const scanResult = await runFullAlertScan();
+    if (scanResult.total > 0) {
+      console.log(
+        `⚠️  启动警告扫描: 发现 ${scanResult.total} 个新警告 (近交: ${scanResult.inbreedingAlerts}, 遗传: ${scanResult.geneticAlerts})`
+      );
+    } else {
+      console.log('✅ 启动警告扫描: 未发现新警告');
+    }
+  } catch (error) {
+    console.error('启动警告扫描失败:', error);
+  }
 });
 
 export default app;

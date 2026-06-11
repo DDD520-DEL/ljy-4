@@ -3,6 +3,7 @@ import { z } from 'zod';
 import prisma from '../lib/prisma.js';
 import { calculateInbreedingCoefficient, calculatePairInbreeding } from '../utils/inbreeding.js';
 import { calculateOffspringRisk } from '../utils/geneticRisk.js';
+import { checkPetAlerts } from '../utils/breedingAlerts.js';
 
 const router = Router();
 
@@ -237,6 +238,11 @@ router.post('/breeding-pairs', async (req, res) => {
       ...pair,
       riskAssessment: parseRiskAssessment(pair.riskAssessment),
     });
+
+    await Promise.all([
+      checkPetAlerts(maleId),
+      checkPetAlerts(femaleId),
+    ]);
   } catch (error) {
     console.error('创建配种对失败:', error);
     res.status(500).json({ error: '创建配种对失败' });

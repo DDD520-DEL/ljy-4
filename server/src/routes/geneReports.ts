@@ -7,6 +7,7 @@ import ExcelJS from 'exceljs';
 import prisma from '../lib/prisma.js';
 import { parseGeneReportPdf, parseGeneReportText, saveParsedReport, generateMockGeneReport } from '../utils/geneParser.js';
 import { getPetGeneticMarkers, calculateIndividualRisk } from '../utils/geneticRisk.js';
+import { checkPetAlerts } from '../utils/breedingAlerts.js';
 
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
@@ -142,6 +143,8 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
         }
 
         await saveParsedReport(petId, report.id, parsedData);
+
+        await checkPetAlerts(petId);
       } catch (parseError) {
         console.error('解析基因报告失败:', parseError);
         await prisma.geneReport.update({
@@ -179,6 +182,8 @@ router.post('/mock/:petId', async (req, res) => {
     });
 
     await saveParsedReport(petId, report.id, mockData);
+
+    await checkPetAlerts(petId);
 
     const updatedReport = await prisma.geneReport.findUnique({
       where: { id: report.id },

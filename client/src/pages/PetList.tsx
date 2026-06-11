@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Plus, Search, Filter, PawPrint, Edit, Trash2, Eye, Clock } from 'lucide-react';
-import { petApi, Pet } from '../services/api';
+import { petApi, Pet, alertApi, BreedingAlert } from '../services/api';
+import { PetAlertSummary } from '../components/AlertBadge';
 
 export default function PetList() {
   const [pets, setPets] = useState<Pet[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [alerts, setAlerts] = useState<BreedingAlert[]>([]);
+  const [affectedPetIds, setAffectedPetIds] = useState<string[]>([]);
 
   const [filters, setFilters] = useState({
     species: searchParams.get('species') || 'all',
@@ -16,7 +19,18 @@ export default function PetList() {
 
   useEffect(() => {
     loadPets();
+    loadAlerts();
   }, [filters]);
+
+  async function loadAlerts() {
+    try {
+      const data = await alertApi.getUnread();
+      setAlerts(data.alerts);
+      setAffectedPetIds(data.affectedPetIds);
+    } catch (error) {
+      console.error('加载警告失败:', error);
+    }
+  }
 
   async function loadPets() {
     setLoading(true);
@@ -170,7 +184,14 @@ export default function PetList() {
                       </span>
                     </div>
                     <div>
-                      <h3 className="font-semibold text-gray-900">{pet.name}</h3>
+                      <div className="flex items-center gap-1.5">
+                        <h3 className="font-semibold text-gray-900">{pet.name}</h3>
+                        <PetAlertSummary
+                          petId={pet.id}
+                          affectedPetIds={affectedPetIds}
+                          allAlerts={alerts}
+                        />
+                      </div>
                       <p className="text-sm text-gray-500">{pet.breed || '未知品种'}</p>
                     </div>
                   </div>
