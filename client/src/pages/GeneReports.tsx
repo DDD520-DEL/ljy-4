@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Upload, FileText, CheckCircle, AlertCircle, Clock, Trash2, Dna, Plus, Download, CheckSquare, Square } from 'lucide-react';
-import { geneReportApi, petApi, GeneReport, Pet } from '../services/api';
+import { Upload, FileText, CheckCircle, AlertCircle, Clock, Trash2, Dna, Plus, Download, CheckSquare, Square, Calendar, FlaskConical, Building2, Link2 } from 'lucide-react';
+import { geneReportApi, petApi, geneTestAppointmentApi, GeneReport, Pet, GeneTestAppointment, GeneTestAppointmentStatus } from '../services/api';
 
 export default function GeneReports() {
   const [pets, setPets] = useState<Pet[]>([]);
@@ -12,18 +12,27 @@ export default function GeneReports() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [activeAppointments, setActiveAppointments] = useState<GeneTestAppointment[]>([]);
+  const [activeAppointmentsLoading, setActiveAppointmentsLoading] = useState(false);
+  const [petAppointments, setPetAppointments] = useState<GeneTestAppointment[]>([]);
+  const [selectedAppointmentId, setSelectedAppointmentId] = useState<string>('');
+  const [showAppointmentUpload, setShowAppointmentUpload] = useState<string | null>(null);
+
   useEffect(() => {
     loadPets();
+    loadActiveAppointments();
   }, []);
 
   useEffect(() => {
     if (selectedPet) {
       loadReports();
+      loadPetAppointments();
     }
   }, [selectedPet]);
 
   useEffect(() => {
     setSelectedIds(new Set());
+    setSelectedAppointmentId('');
   }, [selectedPet]);
 
   async function loadPets() {
@@ -51,15 +60,43 @@ export default function GeneReports() {
     }
   }
 
+  async function loadActiveAppointments() {
+    setActiveAppointmentsLoading(true);
+    try {
+      const data = await geneTestAppointmentApi.listActive();
+      setActiveAppointments(data);
+    } catch (error) {
+      console.error('加载进行中预约失败:', error);
+    } finally {
+      setActiveAppointmentsLoading(false);
+    }
+  }
+
+  async function loadPetAppointments() {
+    if (!selectedPet) return;
+    try {
+      const data = await geneTestAppointmentApi.listByPet(selectedPet);
+      const notCompleted = data.filter(
+        (a) => a.status !== 'completed' && a.status !== 'cancelled'
+      );
+      setPetAppointments(notCompleted);
+    } catch (error) {
+      console.error('加载宠物预约失败:', error);
+    }
+  }
+
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !selectedPet) return;
 
     setUploading(true);
     try {
-      await geneReportApi.upload(selectedPet, file);
+      await geneReportApi.upload(selectedPet, file, selectedAppointmentId || undefined);
       loadReports();
+      loadActiveAppointments();
+      loadPetAppointments();
       alert('文件上传成功，正在解析...');
+      setSelectedAppointmentId('');
     } catch (error) {
       alert('上传失败');
     } finally {
@@ -70,15 +107,52 @@ export default function GeneReports() {
     }
   }
 
+  async function handleAppointmentUpload(aptId: string, file: File) {
+    if (!selectedPet) return;
+
+    setUploading(true);
+    try {
+      await geneReportApi.upload(selectedPet, file, aptId);
+      loadReports();
+      loadActiveAppointments();
+      loadPetAppointments();
+      alert('文件上传成功，正在解析并更新预约状态...');
+      setShowAppointmentUpload(null);
+    } catch (error) {
+      alert('上传失败');
+    } finally {
+      setUploading(false);
+    }
+  }
+
   async function handleGenerateMock() {
     if (!selectedPet) return;
 
     if (!confirm('生成模拟基因报告用于演示？')) return;
 
     try {
-      await geneReportApi.createMock(selectedPet);
+      await geneReportApi.createMock(selectedPet, selectedAppointmentId || undefined);
       loadReports();
+      loadActiveAppointments();
+      loadPetAppointments();
       alert('模拟报告已生成！');
+      setSelectedAppointmentId('');
+    } catch (error) {
+      alert('生成失败');
+    }
+  }
+
+  async function handleAppointmentMock(aptId: string) {
+    if (!selectedPet) return;
+
+    if (!confirm('为该预约生成模拟基因报告？')) return;
+
+    try {
+      await geneReportApi.createMock(selectedPet, aptId);
+      loadReports();
+      loadActiveAppointments();
+      loadPetAppointments();
+      alert('模拟报告已生成，预约状态已更新！');
     } catch (error) {
       alert('生成失败');
     }
@@ -183,6 +257,57 @@ export default function GeneReports() {
     }
   };
 
+  const getAppointmentStatusLabel = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '待确认';
+      case 'confirmed':
+        return '已确认';
+      case 'testing':
+        return '检测中';
+      case 'completed':
+        return '已完成';
+      case 'cancelled':
+        return '已取消';
+      default:
+        return status;
+    }
+  };
+
+  const getAppointmentStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'text-yellow-700 bg-yellow-50';
+      case 'confirmed':
+        return 'text-blue-700 bg-blue-50';
+      case 'testing':
+        return 'text-purple-700 bg-purple-50';
+      case 'completed':
+        return 'text-green-700 bg-green-50';
+      case 'cancelled':
+        return 'text-gray-700 bg-gray-100';
+      default:
+        return 'text-gray-700 bg-gray-100';
+    }
+  };
+
+  const formatTestItems = (items: string[] | string) => {
+    if (Array.isArray(items)) return items;
+    try {
+      return JSON.parse(items);
+    } catch {
+      return [items];
+    }
+  };
+
+  const handleAppointmentFileUpload = (e: React.ChangeEvent<HTMLInputElement>, aptId: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleAppointmentUpload(aptId, file);
+    }
+    e.target.value = '';
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -191,6 +316,142 @@ export default function GeneReports() {
           上传和管理基因检测报告，自动解析遗传标记位点
         </p>
       </div>
+
+      {activeAppointments.length > 0 && (
+        <div className="bg-gradient-to-r from-primary-50 via-white to-purple-50 rounded-xl shadow-sm border border-primary-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-primary-100 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                <FlaskConical className="w-5 h-5 text-primary-600" />
+              </div>
+              <div>
+                <h2 className="font-semibold text-gray-900">进行中的基因检测预约</h2>
+                <p className="text-sm text-gray-500">
+                  共 {activeAppointments.length} 个预约待处理，上传报告后自动更新状态
+                </p>
+              </div>
+            </div>
+            <span className="px-3 py-1 bg-primary-100 text-primary-700 rounded-full text-sm font-medium">
+              {activeAppointments.length} 项
+            </span>
+          </div>
+          <div className="p-4 space-y-3">
+            {activeAppointmentsLoading ? (
+              <div className="text-center py-4 text-gray-500 text-sm">加载中...</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {activeAppointments.map((apt) => {
+                  const items = formatTestItems(apt.testItems);
+                  const isSelectedPet = apt.petId === selectedPet;
+                  return (
+                    <div
+                      key={apt.id}
+                      className={`bg-white rounded-lg border p-4 transition-all ${
+                        isSelectedPet ? 'border-primary-300 ring-1 ring-primary-100' : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm">
+                            {apt.pet?.species === 'dog'
+                              ? '🐕'
+                              : apt.pet?.species === 'cat'
+                              ? '🐱'
+                              : '🐾'}
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 text-sm">
+                              {apt.pet?.name || '未知宠物'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {apt.pet?.breed || apt.pet?.species}
+                            </p>
+                          </div>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${getAppointmentStatusColor(
+                            apt.status
+                          )}`}
+                        >
+                          {getAppointmentStatusLabel(apt.status)}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 mb-3">
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                          <span>{apt.institution}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 text-xs text-gray-600">
+                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
+                          <span>
+                            预计：{new Date(apt.expectedDate).toLocaleDateString('zh-CN')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1 mb-3">
+                        {items.slice(0, 3).map((item: string, idx: number) => (
+                          <span
+                            key={idx}
+                            className="px-1.5 py-0.5 bg-gray-100 text-gray-600 rounded text-xs"
+                          >
+                            {item}
+                          </span>
+                        ))}
+                        {items.length > 3 && (
+                          <span className="px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded text-xs">
+                            +{items.length - 3}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex gap-2">
+                        {!isSelectedPet ? (
+                          <button
+                            onClick={() => setSelectedPet(apt.petId)}
+                            className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 bg-gray-50 text-gray-700 rounded hover:bg-gray-100 transition-colors text-xs font-medium"
+                          >
+                            切换到此宠物
+                          </button>
+                        ) : (
+                          <>
+                            <label className="flex-1 cursor-pointer">
+                              <input
+                                type="file"
+                                accept=".pdf,.jpg,.jpeg,.png"
+                                className="hidden"
+                                onChange={(e) => handleAppointmentFileUpload(e, apt.id)}
+                                disabled={uploading}
+                              />
+                              <div
+                                className={`flex items-center justify-center gap-1 px-2 py-1.5 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors text-xs font-medium ${
+                                  uploading ? 'opacity-50 cursor-not-allowed' : ''
+                                }`}
+                              >
+                                <Upload className="w-3 h-3" />
+                                上传报告
+                              </div>
+                            </label>
+                            <button
+                              onClick={() => handleAppointmentMock(apt.id)}
+                              disabled={uploading}
+                              className="flex-1 flex items-center justify-center gap-1 px-2 py-1.5 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Plus className="w-3 h-3" />
+                              模拟
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-1">
@@ -203,7 +464,7 @@ export default function GeneReports() {
             >
               {pets.map((pet) => (
               <option key={pet.id} value={pet.id}>
-                {pet.name} ({pet.breed || pet.species}
+                {pet.name} ({pet.breed || pet.species})
               </option>
             ))}
             </select>
@@ -232,35 +493,73 @@ export default function GeneReports() {
                   <span className="text-gray-500">报告数量</span>
                   <span className="font-medium text-gray-900">{reports.length} 份</span>
                 </div>
+                {petAppointments.length > 0 && (
+                  <div className="flex justify-between text-sm mt-2">
+                    <span className="text-gray-500">待处理预约</span>
+                    <span className="font-medium text-primary-600">
+                      {petAppointments.length} 项
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           )}
 
-            <div className="mt-4 space-y-2">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={!selectedPet || uploading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Upload className="w-4 h-4" />
-                {uploading ? '上传中...' : '上传报告'}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".pdf,.jpg,.jpeg,.png"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
+            <div className="mt-4 space-y-3">
+              {petAppointments.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+                    <Link2 className="w-4 h-4 text-primary-500" />
+                    关联预约（可选）
+                  </label>
+                  <select
+                    value={selectedAppointmentId}
+                    onChange={(e) => setSelectedAppointmentId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  >
+                    <option value="">不关联预约</option>
+                    {petAppointments.map((apt) => (
+                      <option key={apt.id} value={apt.id}>
+                        {apt.institution} - {new Date(apt.expectedDate).toLocaleDateString('zh-CN')}
+                        [{getAppointmentStatusLabel(apt.status)}]
+                      </option>
+                    ))}
+                  </select>
+                  {selectedAppointmentId && (
+                    <p className="text-xs text-green-600 mt-1.5 flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3" />
+                      上传/生成报告后将自动更新预约状态
+                    </p>
+                  )}
+                </div>
+              )}
 
-              <button
-                onClick={handleGenerateMock}
-                disabled={!selectedPet}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Plus className="w-4 h-4" />
-                生成模拟报告
-              </button>
+              <div className="space-y-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={!selectedPet || uploading}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Upload className="w-4 h-4" />
+                  {uploading ? '上传中...' : '上传报告'}
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+
+                <button
+                  onClick={handleGenerateMock}
+                  disabled={!selectedPet}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-4 h-4" />
+                  生成模拟报告
+                </button>
+              </div>
             </div>
           </div>
 
@@ -350,15 +649,26 @@ export default function GeneReports() {
                           <p className="font-medium text-gray-900">
                             {report.fileName}
                           </p>
-                          <p className="text-sm text-gray-500">
-                            {report.reportType === 'pdf'
-                              ? 'PDF报告'
-                              : report.reportType === 'image'
-                              ? '图片报告'
-                              : '模拟报告'}
-                            {' · '}
-                            上传于 {new Date(report.uploadedAt).toLocaleString()}
-                          </p>
+                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <span>
+                              {report.reportType === 'pdf'
+                                ? 'PDF报告'
+                                : report.reportType === 'image'
+                                ? '图片报告'
+                                : '模拟报告'}
+                            </span>
+                            <span>·</span>
+                            <span>上传于 {new Date(report.uploadedAt).toLocaleString()}</span>
+                            {report.appointmentId && (
+                              <>
+                                <span>·</span>
+                                <span className="text-primary-600 flex items-center gap-0.5">
+                                  <Link2 className="w-3 h-3" />
+                                  已关联预约
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">

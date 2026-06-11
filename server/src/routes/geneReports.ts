@@ -97,6 +97,7 @@ router.get('/:id', async (req, res) => {
 router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) => {
   try {
     const { petId } = req.params;
+    const { appointmentId } = req.body;
 
     if (!req.file) {
       return res.status(400).json({ error: '请上传文件' });
@@ -105,6 +106,15 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
     const pet = await prisma.pet.findUnique({ where: { id: petId } });
     if (!pet) {
       return res.status(404).json({ error: '宠物不存在' });
+    }
+
+    if (appointmentId) {
+      const appointment = await prisma.geneTestAppointment.findUnique({
+        where: { id: appointmentId },
+      });
+      if (!appointment || appointment.petId !== petId) {
+        return res.status(400).json({ error: '预约记录不存在或与宠物不匹配' });
+      }
     }
 
     const reportType = req.file.mimetype.includes('pdf') ? 'pdf' : 'image';
@@ -116,8 +126,18 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
         fileName: req.file.originalname,
         fileUrl: `/uploads/${req.file.filename}`,
         status: 'pending',
+        appointmentId: appointmentId || null,
       },
     });
+
+    if (appointmentId) {
+      await prisma.geneTestAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: 'testing',
+        },
+      });
+    }
 
     res.status(201).json({
       report: {
@@ -144,6 +164,16 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
 
         await saveParsedReport(petId, report.id, parsedData);
 
+        if (appointmentId) {
+          await prisma.geneTestAppointment.update({
+            where: { id: appointmentId },
+            data: {
+              status: 'completed',
+              completedAt: new Date(),
+            },
+          });
+        }
+
         await checkPetAlerts(petId);
       } catch (parseError) {
         console.error('解析基因报告失败:', parseError);
@@ -162,10 +192,20 @@ router.post('/upload/:petId', upload.single('file'), async (req: any, res: any) 
 router.post('/mock/:petId', async (req, res) => {
   try {
     const { petId } = req.params;
+    const { appointmentId } = req.body;
 
     const pet = await prisma.pet.findUnique({ where: { id: petId } });
     if (!pet) {
       return res.status(404).json({ error: '宠物不存在' });
+    }
+
+    if (appointmentId) {
+      const appointment = await prisma.geneTestAppointment.findUnique({
+        where: { id: appointmentId },
+      });
+      if (!appointment || appointment.petId !== petId) {
+        return res.status(400).json({ error: '预约记录不存在或与宠物不匹配' });
+      }
     }
 
     const mockData = generateMockGeneReport(pet.species, pet.breed || '');
@@ -178,10 +218,21 @@ router.post('/mock/:petId', async (req, res) => {
         status: 'parsed',
         parsedData: JSON.stringify(mockData),
         parsedAt: new Date(),
+        appointmentId: appointmentId || null,
       },
     });
 
     await saveParsedReport(petId, report.id, mockData);
+
+    if (appointmentId) {
+      await prisma.geneTestAppointment.update({
+        where: { id: appointmentId },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+        },
+      });
+    }
 
     await checkPetAlerts(petId);
 

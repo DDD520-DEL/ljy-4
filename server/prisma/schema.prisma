@@ -36,6 +36,7 @@ model Pet {
   puppyRecords          PuppyRecord[]
   transferRecords       PetTransfer[]
   breedingAlerts        BreedingAlert[]
+  geneTestAppointments  GeneTestAppointment[]
 }
 
 model ParentRelation {
@@ -51,17 +52,19 @@ model ParentRelation {
 }
 
 model GeneReport {
-  id         String   @id @default(uuid())
-  petId      String
-  reportType String   // pdf, image
-  fileName   String
-  fileUrl    String?
-  parsedData String?
-  status     String   @default("pending") // pending, parsed, failed
-  uploadedAt DateTime @default(now())
-  parsedAt   DateTime?
+  id                String              @id @default(uuid())
+  petId             String
+  reportType        String              // pdf, image
+  fileName          String
+  fileUrl           String?
+  parsedData        String?
+  status            String              @default("pending") // pending, parsed, failed
+  uploadedAt        DateTime            @default(now())
+  parsedAt          DateTime?
+  appointmentId     String?
 
-  pet        Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+  pet               Pet                 @relation(fields: [petId], references: [id], onDelete: Cascade)
+  geneTestAppointment GeneTestAppointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
 }
 
 model GeneticMarker {
@@ -208,4 +211,23 @@ model BreedingAlert {
   @@index([isRead])
   @@index([petId])
   @@index([alertType])
+}
+
+model GeneTestAppointment {
+  id               String        @id @default(uuid())
+  petId            String
+  institution      String      // 检测机构名称
+  expectedDate     DateTime    // 预计检测日期
+  testItems        String      // 检测项目（逗号分隔的字符串或JSON）
+  status           String      @default("pending") // pending, confirmed, testing, completed, cancelled
+  notes            String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  completedAt      DateTime?
+
+  pet              Pet         @relation(fields: [petId], references: [id], onDelete: Cascade)
+  geneReports      GeneReport[]
+
+  @@index([petId])
+  @@index([status])
 }

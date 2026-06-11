@@ -53,6 +53,7 @@ export interface GeneReport {
   status: string;
   uploadedAt: string;
   parsedAt: string | null;
+  appointmentId: string | null;
 }
 
 export interface GeneticMarker {
@@ -496,6 +497,29 @@ export interface AlertsListResponse {
   total: number;
 }
 
+export type GeneTestAppointmentStatus = 'pending' | 'confirmed' | 'testing' | 'completed' | 'cancelled';
+
+export interface GeneTestAppointment {
+  id: string;
+  petId: string;
+  institution: string;
+  expectedDate: string;
+  testItems: string[] | string;
+  status: GeneTestAppointmentStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
+  pet?: {
+    id: string;
+    name: string;
+    species: string;
+    breed: string | null;
+    avatarUrl: string | null;
+  };
+  geneReports?: GeneReport[];
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -533,14 +557,18 @@ export const relationApi = {
 export const geneReportApi = {
   listByPet: (petId: string) => api.get<any, GeneReport[]>(`/gene-reports/pet/${petId}`),
   get: (id: string) => api.get<any, GeneReport>(`/gene-reports/${id}`),
-  upload: (petId: string, file: File) => {
+  upload: (petId: string, file: File, appointmentId?: string) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (appointmentId) {
+      formData.append('appointmentId', appointmentId);
+    }
     return api.post<any, any>(`/gene-reports/upload/${petId}`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
-  createMock: (petId: string) => api.post<any, GeneReport>(`/gene-reports/mock/${petId}`),
+  createMock: (petId: string, appointmentId?: string) =>
+    api.post<any, GeneReport>(`/gene-reports/mock/${petId}`, appointmentId ? { appointmentId } : {}),
   remove: (id: string) => api.delete<any, { message: string }>(`/gene-reports/${id}`),
   batchExport: async (reportIds: string[]) => {
     const response = await axios.post('/api/gene-reports/batch-export', { reportIds }, {
@@ -706,6 +734,35 @@ export const alertApi = {
     api.delete<any, { message: string }>(`/alerts/${id}`),
   clearRead: () =>
     api.delete<any, { message: string; deletedCount: number }>('/alerts/clear/read'),
+};
+
+export const geneTestAppointmentApi = {
+  listByPet: (petId: string, status?: string) =>
+    api.get<any, GeneTestAppointment[]>(`/gene-test-appointments/pet/${petId}`, {
+      params: status ? { status } : undefined,
+    }),
+  listActive: (petId?: string) =>
+    api.get<any, GeneTestAppointment[]>('/gene-test-appointments/active', {
+      params: petId ? { petId } : undefined,
+    }),
+  get: (id: string) => api.get<any, GeneTestAppointment>(`/gene-test-appointments/${id}`),
+  create: (petId: string, data: {
+    institution: string;
+    expectedDate: string;
+    testItems: string[] | string;
+    notes?: string | null;
+    status?: string;
+  }) => api.post<any, GeneTestAppointment>(`/gene-test-appointments/pet/${petId}`, data),
+  update: (id: string, data: Partial<{
+    institution: string;
+    expectedDate: string;
+    testItems: string[] | string;
+    notes: string | null;
+  }>) => api.put<any, GeneTestAppointment>(`/gene-test-appointments/${id}`, data),
+  updateStatus: (id: string, status: GeneTestAppointmentStatus) =>
+    api.put<any, GeneTestAppointment>(`/gene-test-appointments/${id}/status`, { status }),
+  remove: (id: string) =>
+    api.delete<any, { message: string }>(`/gene-test-appointments/${id}`),
 };
 
 export default api;
