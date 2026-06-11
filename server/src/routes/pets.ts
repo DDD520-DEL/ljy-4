@@ -63,6 +63,12 @@ const vaccineRecordSchema = z.object({
   notes: z.string().optional().nullable(),
 });
 
+const dailyLogSchema = z.object({
+  content: z.string().min(1, '日志内容不能为空'),
+  imageUrl: z.string().optional().nullable(),
+  mood: z.enum(['happy', 'normal', 'unwell']),
+});
+
 router.get('/', async (req, res) => {
   try {
     const { species, breed, gender, isBreeding, search } = req.query;
@@ -862,6 +868,115 @@ router.delete('/:id/vaccines/:recordId', async (req, res) => {
   } catch (error) {
     console.error('删除疫苗接种记录失败:', error);
     res.status(500).json({ error: '删除疫苗接种记录失败' });
+  }
+});
+
+router.get('/:id/daily-logs', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = parseInt(req.query.pageSize as string) || 10;
+    const skip = (page - 1) * pageSize;
+
+    const pet = await prisma.pet.findUnique({ where: { id } });
+    if (!pet) {
+      return res.status(404).json({ error: '宠物不存在' });
+    }
+
+    const [logs, total] = await Promise.all([
+      prisma.petDailyLog.findMany({
+        where: { petId: id },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.petDailyLog.count({ where: { petId: id } }),
+    ]);
+
+    res.json({
+      logs,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
+    });
+  } catch (error) {
+    console.error('获取日常日志失败:', error);
+    res.status(500).json({ error: '获取日常日志失败' });
+  }
+});
+
+router.post('/:id/daily-logs', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const data = dailyLogSchema.parse(req.body);
+
+    const pet = await prisma.pet.findUnique({ where: { id } });
+    if (!pet) {
+      return res.status(404).json({ error: '宠物不存在' });
+    }
+
+    const log = await prisma.petDailyLog.create({
+      data: {
+        petId: id,
+        content: data.content,
+        imageUrl: data.imageUrl || null,
+        mood: data.mood,
+      },
+    });
+
+    res.status(201).json(log);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: '数据验证失败', details: error.errors });
+    }
+    console.error('创建日常日志失败:', error);
+    res.status(500).json({ error: '创建日常日志失败' });
+  }
+});
+
+router.put('/:id/daily-logs/:logId', async (req, res) => {
+  try {
+    const { logId } = req.params;
+    const data = dailyLogSchema.partial().parse(req.body);
+
+    const log = await prisma.petDailyLog.findUnique({ where: { id: logId } });
+    if (!log) {
+      return res.status(404).json({ error: '日志不存在' });
+    }
+
+    const updated = await prisma.petDailyLog.update({
+      where: { id: logId },
+      data,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: '数据验证失败', details: error.errors });
+    }
+    console.error('更新日常日志失败:', error);
+    res.status(500).json({ error: '更新日常日志失败' });
+  }
+});
+
+router.delete('/:id/daily-logs/:logId', async (req, res) => {
+  try {
+    const { logId } = req.params;
+
+    const log = await prisma.petDailyLog.findUnique({ where: { id: logId } });
+    if (!log) {
+      return res.status(404).json({ error: '日志不存在' });
+    }
+
+    await prisma.petDailyLog.delete({ where: { id: logId } });
+
+    res.json({ message: '删除成功' });
+  } catch (error) {
+    console.error('删除日常日志失败:', error);
+    res.status(500).json({ error: '删除日常日志失败' });
   }
 });
 

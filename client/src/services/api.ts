@@ -544,6 +544,30 @@ export interface BreedWeightStandardResponse {
   message: string;
 }
 
+export type PetDailyLogMood = 'happy' | 'normal' | 'unwell';
+
+export interface PetDailyLog {
+  id: string;
+  petId: string;
+  content: string;
+  imageUrl: string | null;
+  mood: PetDailyLogMood;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PetDailyLogPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PetDailyLogListResponse {
+  logs: PetDailyLog[];
+  pagination: PetDailyLogPagination;
+}
+
 export const petApi = {
   list: (params?: Record<string, any>) => api.get<any, Pet[]>('/pets', { params }),
   get: (id: string) => api.get<any, Pet>(`/pets/${id}`),
@@ -580,6 +604,16 @@ export const petApi = {
     api.put<any, VaccineRecord>(`/pets/${id}/vaccines/${recordId}`, data),
   removeVaccine: (id: string, recordId: string) =>
     api.delete<any, { message: string }>(`/pets/${id}/vaccines/${recordId}`),
+  listDailyLogs: (id: string, page = 1, pageSize = 10) =>
+    api.get<any, PetDailyLogListResponse>(`/pets/${id}/daily-logs`, {
+      params: { page, pageSize },
+    }),
+  createDailyLog: (id: string, data: { content: string; imageUrl?: string | null; mood: PetDailyLogMood }) =>
+    api.post<any, PetDailyLog>(`/pets/${id}/daily-logs`, data),
+  updateDailyLog: (id: string, logId: string, data: Partial<{ content: string; imageUrl: string | null; mood: PetDailyLogMood }>) =>
+    api.put<any, PetDailyLog>(`/pets/${id}/daily-logs/${logId}`, data),
+  removeDailyLog: (id: string, logId: string) =>
+    api.delete<any, { message: string }>(`/pets/${id}/daily-logs/${logId}`),
 };
 
 export const relationApi = {

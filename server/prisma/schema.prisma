@@ -38,6 +38,7 @@ model Pet {
   breedingAlerts        BreedingAlert[]
   geneTestAppointments  GeneTestAppointment[]
   vaccineRecords        VaccineRecord[]
+  dailyLogs             PetDailyLog[]
 }
 
 model ParentRelation {
@@ -249,4 +250,19 @@ model VaccineRecord {
   @@index([petId])
   @@index([vaccinationDate])
   @@index([expiryDate])
+}
+
+model PetDailyLog {
+  id        String   @id @default(uuid())
+  petId     String
+  content   String
+  imageUrl  String?
+  mood      String   // happy, normal, unwell
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pet       Pet      @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([petId])
+  @@index([createdAt])
 }

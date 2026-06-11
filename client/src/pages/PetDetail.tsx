@@ -26,6 +26,13 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  BookOpen,
+  Smile,
+  Meh,
+  Frown,
+  Image,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   LineChart,
@@ -38,7 +45,7 @@ import {
   ResponsiveContainer,
   ReferenceArea,
 } from 'recharts';
-import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord, WeightRecord, BreedWeightStandard } from '../services/api';
+import { petApi, geneReportApi, geneticsApi, geneTestAppointmentApi, Pet, RiskSummary, PetTransfer, GeneTestAppointment, GeneTestAppointmentStatus, VaccineRecord, WeightRecord, BreedWeightStandard, PetDailyLog, PetDailyLogMood, PetDailyLogListResponse } from '../services/api';
 
 export default function PetDetail() {
   const { id } = useParams<{ id: string }>();
@@ -46,7 +53,7 @@ export default function PetDetail() {
   const [pet, setPet] = useState<Pet | null>(null);
   const [riskSummary, setRiskSummary] = useState<RiskSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines' | 'weight'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'relations' | 'genes' | 'reports' | 'appointments' | 'transfers' | 'vaccines' | 'weight' | 'dailyLogs'>('info');
   const [weights, setWeights] = useState<WeightRecord[]>([]);
   const [weightsLoading, setWeightsLoading] = useState(false);
   const [showWeightForm, setShowWeightForm] = useState(false);
@@ -94,6 +101,19 @@ export default function PetDetail() {
     notes: '',
   });
 
+  const [dailyLogs, setDailyLogs] = useState<PetDailyLog[]>([]);
+  const [dailyLogsLoading, setDailyLogsLoading] = useState(false);
+  const [dailyLogsPage, setDailyLogsPage] = useState(1);
+  const [dailyLogsTotalPages, setDailyLogsTotalPages] = useState(1);
+  const [dailyLogsTotal, setDailyLogsTotal] = useState(0);
+  const [showDailyLogForm, setShowDailyLogForm] = useState(false);
+  const [editingDailyLog, setEditingDailyLog] = useState<PetDailyLog | null>(null);
+  const [dailyLogForm, setDailyLogForm] = useState({
+    content: '',
+    imageUrl: '',
+    mood: 'normal' as PetDailyLogMood,
+  });
+
   const DEFAULT_TEST_ITEMS = [
     '常规遗传病筛查',
     '品种特异性检测',
@@ -134,6 +154,12 @@ export default function PetDetail() {
       loadWeightStandard();
     }
   }, [id, activeTab, pet?.species, pet?.breed]);
+
+  useEffect(() => {
+    if (id && activeTab === 'dailyLogs') {
+      loadDailyLogs(dailyLogsPage);
+    }
+  }, [id, activeTab, dailyLogsPage]);
 
   async function loadWeights() {
     if (!id) return;
@@ -311,6 +337,94 @@ export default function PetDetail() {
       alert('更新失败，请重试');
     }
   }
+
+  async function loadDailyLogs(page = 1) {
+    if (!id) return;
+    setDailyLogsLoading(true);
+    try {
+      const data = await petApi.listDailyLogs(id, page, 10);
+      setDailyLogs(data.logs);
+      setDailyLogsTotalPages(data.pagination.totalPages);
+      setDailyLogsTotal(data.pagination.total);
+    } catch (error) {
+      console.error('加载日常日志失败:', error);
+    } finally {
+      setDailyLogsLoading(false);
+    }
+  }
+
+  function resetDailyLogForm() {
+    setDailyLogForm({
+      content: '',
+      imageUrl: '',
+      mood: 'normal',
+    });
+    setEditingDailyLog(null);
+    setShowDailyLogForm(false);
+  }
+
+  function handleEditDailyLog(log: PetDailyLog) {
+    setEditingDailyLog(log);
+    setDailyLogForm({
+      content: log.content,
+      imageUrl: log.imageUrl || '',
+      mood: log.mood,
+    });
+    setShowDailyLogForm(true);
+  }
+
+  async function handleSubmitDailyLog(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+
+    if (!dailyLogForm.content.trim()) {
+      alert('请输入日志内容');
+      return;
+    }
+
+    try {
+      const payload = {
+        content: dailyLogForm.content,
+        imageUrl: dailyLogForm.imageUrl.trim() || null,
+        mood: dailyLogForm.mood,
+      };
+
+      if (editingDailyLog) {
+        await petApi.updateDailyLog(id, editingDailyLog.id, payload);
+      } else {
+        await petApi.createDailyLog(id, payload);
+      }
+      resetDailyLogForm();
+      loadDailyLogs(dailyLogsPage);
+    } catch (error) {
+      console.error('保存日常日志失败:', error);
+      alert('保存失败，请重试');
+    }
+  }
+
+  async function handleDeleteDailyLog(logId: string) {
+    if (!id) return;
+    if (!confirm('确定要删除这条日志吗？')) return;
+
+    try {
+      await petApi.removeDailyLog(id, logId);
+      loadDailyLogs(dailyLogsPage);
+    } catch (error) {
+      console.error('删除日常日志失败:', error);
+      alert('删除失败，请重试');
+    }
+  }
+
+  const getMoodInfo = (mood: PetDailyLogMood) => {
+    switch (mood) {
+      case 'happy':
+        return { label: '开心', icon: Smile, color: 'text-green-600 bg-green-50 border-green-200' };
+      case 'unwell':
+        return { label: '不适', icon: Frown, color: 'text-red-600 bg-red-50 border-red-200' };
+      default:
+        return { label: '正常', icon: Meh, color: 'text-gray-600 bg-gray-50 border-gray-200' };
+    }
+  };
 
   async function loadTransfers() {
     if (!id) return;
@@ -652,6 +766,7 @@ export default function PetDetail() {
               {[
                 { key: 'info', label: '基本信息', icon: PawPrint },
                 { key: 'weight', label: '体重追踪', icon: Scale },
+                { key: 'dailyLogs', label: '日常日志', icon: BookOpen },
                 { key: 'relations', label: '亲属关系', icon: Network },
                 { key: 'genes', label: '基因标记', icon: Dna },
                 { key: 'reports', label: '基因报告', icon: FileText },
@@ -715,6 +830,255 @@ export default function PetDetail() {
                       <p className="text-sm text-gray-500 mb-1">描述</p>
                       <p className="text-gray-900">{pet.description}</p>
                     </div>
+                  )}
+                </div>
+              )}
+
+              {activeTab === 'dailyLogs' && (
+                <div>
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900">宠物日常日志</h3>
+                      <p className="text-xs text-gray-500 mt-1">共 {dailyLogsTotal} 条记录</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        resetDailyLogForm();
+                        setShowDailyLogForm(true);
+                      }}
+                      className="flex items-center gap-1 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium whitespace-nowrap"
+                    >
+                      <Plus className="w-4 h-4" />
+                      写日志
+                    </button>
+                  </div>
+
+                  {showDailyLogForm && (
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="font-medium text-gray-900">
+                          {editingDailyLog ? '编辑日志' : '写日常日志'}
+                        </h4>
+                        <button
+                          onClick={resetDailyLogForm}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <form onSubmit={handleSubmitDailyLog} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            心情标签
+                          </label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(['happy', 'normal', 'unwell'] as PetDailyLogMood[]).map((mood) => {
+                              const moodInfo = getMoodInfo(mood);
+                              const MoodIcon = moodInfo.icon;
+                              const isSelected = dailyLogForm.mood === mood;
+                              return (
+                                <label
+                                  key={mood}
+                                  className={`flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                                    isSelected
+                                      ? moodInfo.color + ' border-current font-medium'
+                                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <input
+                                    type="radio"
+                                    name="mood"
+                                    value={mood}
+                                    checked={isSelected}
+                                    onChange={(e) => setDailyLogForm({ ...dailyLogForm, mood: e.target.value as PetDailyLogMood })}
+                                    className="sr-only"
+                                  />
+                                  <MoodIcon className="w-5 h-5" />
+                                  <span className="text-xs">{moodInfo.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            日志内容 <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            rows={4}
+                            required
+                            value={dailyLogForm.content}
+                            onChange={(e) => setDailyLogForm({ ...dailyLogForm, content: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
+                            placeholder="记录今天和宠物的点点滴滴..."
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            配图链接（可选）
+                          </label>
+                          <div className="relative">
+                            <Image className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                              type="url"
+                              value={dailyLogForm.imageUrl}
+                              onChange={(e) => setDailyLogForm({ ...dailyLogForm, imageUrl: e.target.value })}
+                              className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                              placeholder="https://example.com/image.jpg"
+                            />
+                          </div>
+                          {dailyLogForm.imageUrl && (
+                            <div className="mt-2">
+                              <img
+                                src={dailyLogForm.imageUrl}
+                                alt="预览"
+                                className="w-32 h-32 object-cover rounded-lg border border-gray-200"
+                                onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+                              />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={resetDailyLogForm}
+                            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm font-medium"
+                          >
+                            取消
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
+                          >
+                            {editingDailyLog ? '保存修改' : '发布日志'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {dailyLogsLoading ? (
+                    <div className="text-center py-8 text-gray-500">加载中...</div>
+                  ) : dailyLogs.length === 0 ? (
+                    <div className="text-center py-8">
+                      <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">暂无日常日志</p>
+                      <p className="text-sm text-gray-400 mt-1">点击上方按钮记录和宠物的美好时光</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-4">
+                        {dailyLogs.map((log) => {
+                          const moodInfo = getMoodInfo(log.mood);
+                          const MoodIcon = moodInfo.icon;
+                          return (
+                            <div
+                              key={log.id}
+                              className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
+                            >
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center gap-3">
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border ${moodInfo.color}`}>
+                                    <MoodIcon className="w-3.5 h-3.5" />
+                                    {moodInfo.label}
+                                  </span>
+                                  <span className="text-xs text-gray-500 flex items-center gap-1">
+                                    <Calendar className="w-3.5 h-3.5" />
+                                    {new Date(log.createdAt).toLocaleString('zh-CN')}
+                                  </span>
+                                </div>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => handleEditDailyLog(log)}
+                                    className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded transition-colors"
+                                    title="编辑"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteDailyLog(log.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="删除"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
+                              <div className="whitespace-pre-wrap text-sm text-gray-800 mb-3 leading-relaxed">
+                                {log.content}
+                              </div>
+                              {log.imageUrl && (
+                                <div className="mb-2">
+                                  <img
+                                    src={log.imageUrl}
+                                    alt="日志配图"
+                                    className="max-w-full max-h-80 object-contain rounded-lg border border-gray-100 cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => window.open(log.imageUrl!, '_blank')}
+                                    onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')}
+                                  />
+                                </div>
+                              )}
+                              {log.updatedAt !== log.createdAt && (
+                                <p className="text-xs text-gray-400">
+                                  最后编辑于 {new Date(log.updatedAt).toLocaleString('zh-CN')}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {dailyLogsTotalPages > 1 && (
+                        <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-100">
+                          <p className="text-sm text-gray-600">
+                            第 {dailyLogsPage} / {dailyLogsTotalPages} 页
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setDailyLogsPage((p) => Math.max(1, p - 1))}
+                              disabled={dailyLogsPage <= 1}
+                              className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronLeft className="w-4 h-4" />
+                            </button>
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: Math.min(5, dailyLogsTotalPages) }, (_, i) => {
+                                let pageNum: number;
+                                if (dailyLogsTotalPages <= 5) {
+                                  pageNum = i + 1;
+                                } else if (dailyLogsPage <= 3) {
+                                  pageNum = i + 1;
+                                } else if (dailyLogsPage >= dailyLogsTotalPages - 2) {
+                                  pageNum = dailyLogsTotalPages - 4 + i;
+                                } else {
+                                  pageNum = dailyLogsPage - 2 + i;
+                                }
+                                return (
+                                  <button
+                                    key={pageNum}
+                                    onClick={() => setDailyLogsPage(pageNum)}
+                                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                                      dailyLogsPage === pageNum
+                                        ? 'bg-primary-600 text-white'
+                                        : 'text-gray-600 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    {pageNum}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <button
+                              onClick={() => setDailyLogsPage((p) => Math.min(dailyLogsTotalPages, p + 1))}
+                              disabled={dailyLogsPage >= dailyLogsTotalPages}
+                              className="p-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}
